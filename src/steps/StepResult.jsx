@@ -1,12 +1,11 @@
 import React from 'react';
 import { scoreAssessment } from '../core/biotic-index.js';
-import { GhostButton, PrimaryButton } from '../ui/primitives.jsx';
+import { GhostButton, PrimaryButton, Eyebrow, healthColor } from '../ui/primitives.jsx';
 import ReliabilityCard from '../ui/ReliabilityCard.jsx';
 
 // Step 3 — the ecological health result + data-reliability.
-// Big clear class + score, plain-language meaning, the transparent calculation,
-// the finds that drove it, and a separate data-reliability panel. (Days 5-6 add
-// One Health + FHIR after this screen.)
+// Flat, tonal, instrument-panel treatment (no gradients per DESIGN.md): the
+// health color is used as an accent value/stroke, not a fill.
 
 export default function StepResult({ counts, streamName, submission, onBack, onNext, onRestart }) {
   const result = scoreAssessment(counts);
@@ -15,38 +14,48 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
   if (result.score === null) {
     return (
       <div className="space-y-4">
-        <p className="text-slate-600">{result.method}</p>
+        <p className="text-ash">{result.method}</p>
         <GhostButton onClick={onBack}>Back to recording</GhostButton>
       </div>
     );
   }
 
+  const color = healthColor(result.classKey);
+
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-bold text-slate-800">Stream health</h2>
-        {streamName && <p className="text-sm text-slate-500">{streamName}</p>}
+        <Eyebrow>Step 3 · Result</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">Stream health</h2>
+        {streamName && <p className="text-sm text-ash mt-1">{streamName}</p>}
       </div>
 
-      {/* Headline result */}
+      {/* Headline result — flat card, accent left-border in the health color */}
       <div
-        className="rounded-2xl p-5 text-white"
-        style={{ background: `linear-gradient(135deg, ${c.color}, ${shade(c.color)})` }}
+        className="rounded bg-card border border-steel p-5"
+        style={{ borderLeft: `3px solid ${color}` }}
       >
         <div className="flex items-center gap-4">
-          <div className="w-20 h-20 rounded-full bg-white/20 grid place-items-center backdrop-blur">
-            <span className="text-3xl font-black tabular-nums">{result.score}</span>
+          <div
+            className="w-20 h-20 rounded-full grid place-items-center border-2"
+            style={{ borderColor: color }}
+          >
+            <span className="text-3xl font-semibold tabular-nums" style={{ color }}>
+              {result.score}
+            </span>
           </div>
           <div>
-            <div className="text-2xl font-black">{c.label}</div>
-            <div className="text-white/90 text-sm mt-0.5">{c.blurb}</div>
+            <div className="text-2xl font-semibold" style={{ color }}>
+              {c.label}
+            </div>
+            <div className="text-ash text-sm mt-0.5">{c.blurb}</div>
           </div>
         </div>
       </div>
 
       {/* What you found */}
       <div>
-        <h3 className="text-sm font-bold text-slate-700 mb-2">
+        <h3 className="text-sm font-medium text-snow mb-2">
           What drove this ({result.richness} group{result.richness === 1 ? '' : 's'})
         </h3>
         <div className="space-y-1.5">
@@ -55,10 +64,10 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
             .map((f) => (
               <div
                 key={f.id}
-                className="flex items-center gap-3 bg-white rounded-lg border border-slate-200 px-3 py-2"
+                className="flex items-center gap-3 bg-section rounded border border-steel px-3 py-2"
               >
-                <div className="flex-1 text-sm font-medium text-slate-800">{f.commonName}</div>
-                <div className="text-xs text-slate-500">×{f.count} seen</div>
+                <div className="flex-1 text-sm text-snow">{f.commonName}</div>
+                <div className="font-mono text-[11px] text-ash">×{f.count}</div>
                 <SensBar value={f.sensitivity} />
               </div>
             ))}
@@ -66,19 +75,19 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
       </div>
 
       {/* Transparent method */}
-      <details className="bg-slate-50 rounded-xl border border-slate-200 px-4 py-3">
-        <summary className="text-sm font-semibold text-slate-700 cursor-pointer">
+      <details className="bg-section rounded border border-steel px-4 py-3">
+        <summary className="text-sm font-medium text-snow cursor-pointer">
           How this score is calculated
         </summary>
-        <p className="text-sm text-slate-600 mt-2">{result.method}</p>
-        <p className="text-xs text-slate-400 mt-2">
+        <p className="text-sm text-ash mt-2">{result.method}</p>
+        <p className="text-xs text-fog mt-2">
           Method: average pollution-sensitivity of the groups found (miniSASS /
           SASS5 / SIGNAL family). Sensitive groups score high, tolerant groups
           score low. Presence is what counts, not how many.
         </p>
       </details>
 
-      {/* Data reliability — how much a researcher can trust this record */}
+      {/* Data reliability */}
       {submission && <ReliabilityCard submission={submission} />}
 
       <div className="space-y-2">
@@ -93,24 +102,13 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
 }
 
 function SensBar({ value }) {
+  const color = value >= 7 ? '#3ecf8e' : value >= 4 ? '#f5c451' : '#ff6b6b';
   return (
-    <div className="w-16 h-2 rounded-full bg-slate-200 overflow-hidden" title={`Sensitivity ${value}/10`}>
-      <div
-        className="h-full rounded-full"
-        style={{
-          width: `${value * 10}%`,
-          background: value >= 7 ? '#1a7f5a' : value >= 4 ? '#f2b134' : '#c0392b',
-        }}
-      />
+    <div
+      className="w-16 h-1.5 rounded-full bg-steel overflow-hidden"
+      title={`Sensitivity ${value}/10`}
+    >
+      <div className="h-full rounded-full" style={{ width: `${value * 10}%`, background: color }} />
     </div>
   );
-}
-
-// darken a hex color for the gradient end
-function shade(hex) {
-  const n = parseInt(hex.slice(1), 16);
-  const r = Math.max(0, ((n >> 16) & 255) - 30);
-  const g = Math.max(0, ((n >> 8) & 255) - 30);
-  const b = Math.max(0, (n & 255) - 30);
-  return `rgb(${r},${g},${b})`;
 }

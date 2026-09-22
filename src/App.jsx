@@ -90,12 +90,17 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen font-sans text-slate-800 flex flex-col">
-      <header className="bg-bahari-deep text-white px-5 pt-4 pb-3 sticky top-0 z-10">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold tracking-tight">Bahari</h1>
-            <p className="text-bahari-pale/70 text-xs">Citizen stream health</p>
+    <div className="min-h-screen font-sans text-snow flex flex-col">
+      <header className="bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
+        <div className="max-w-xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="w-7 h-7 rounded grid place-items-center bg-accent text-ink font-bold text-sm">
+              B
+            </span>
+            <div>
+              <h1 className="text-base font-semibold tracking-tight leading-none">Bahari</h1>
+              <p className="eyebrow mt-1">Citizen stream health</p>
+            </div>
           </div>
           <Stepper2 steps={STEPS} activeIndex={stepIndex} />
         </div>
@@ -155,8 +160,10 @@ export default function App() {
         )}
       </main>
 
-      <footer className="text-center text-[11px] text-slate-400 py-3 px-5">
-        Bahari · IEEE OneAquaHealth Global Hackathon 2026 · stream → One Health
+      <footer className="border-t border-steel text-center py-3 px-5">
+        <span className="eyebrow">
+          Bahari · IEEE OneAquaHealth 2026 · stream to One Health
+        </span>
       </footer>
     </div>
   );

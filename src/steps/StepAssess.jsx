@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
 import { TAXA } from '../core/taxa.js';
 import { groupsFound } from '../core/assessment.js';
-import { TierBadge, PrimaryButton, GhostButton } from '../ui/primitives.jsx';
+import { TierBadge, PrimaryButton, GhostButton, Eyebrow } from '../ui/primitives.jsx';
 import AssistPanel from '../ui/AssistPanel.jsx';
 
 // Step 2 — guided "what did you find?" recording.
 // Mobile-first taxa cards grouped by sensitivity tier, jargon-free, with a
-// tap-friendly counter and a "how to recognise" hint. No science jargon shown
-// to the citizen beyond an optional expandable note.
+// tap-friendly counter and a "how to recognise" hint.
 
 const TIER_ORDER = [
-  { key: 'sensitive', title: 'Clean-water lovers', hint: 'Only live where water is healthy — great to find.' },
-  { key: 'moderate', title: 'In-betweeners', hint: 'Cope with some stress on the stream.' },
-  { key: 'tolerant', title: 'Tough survivors', hint: 'Can live even in polluted water.' },
+  { key: 'sensitive', title: 'Clean-water lovers', hint: 'Only live where water is healthy.' },
+  { key: 'moderate', title: 'In-betweeners', hint: 'Cope with some stress.' },
+  { key: 'tolerant', title: 'Tough survivors', hint: 'Live even in polluted water.' },
 ];
 
 export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack, onNext }) {
@@ -23,8 +22,6 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
     onChange({ ...counts, [id]: Math.max(0, next) });
   }
 
-  // AI confirmed a suggestion -> the HUMAN accepted it, so record one.
-  // A confirmed AI photo also counts as photo evidence for reliability.
   function confirmFromAssist(id) {
     setCount(id, (counts[id] ?? 0) + 1);
     onPhotoConfirmed?.();
@@ -34,24 +31,22 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-bold text-slate-800">What did you find?</h2>
-        <p className="text-sm text-slate-500">
-          Flip a few stones and scoop the streambed. Tap <b>+</b> for each kind of
-          little creature you see. Not sure? Skip it — only record what you're
+        <Eyebrow>Step 2 · Find</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">What did you find?</h2>
+        <p className="text-sm text-ash mt-1">
+          Flip a few stones and scoop the streambed. Tap <b className="text-snow">+</b> for
+          each kind of creature you see. Not sure? Skip it, record only what you're
           confident about.
         </p>
       </div>
 
       {/* Optional AI identification help */}
       {showAssist ? (
-        <AssistPanel
-          onConfirm={confirmFromAssist}
-          onClose={() => setShowAssist(false)}
-        />
+        <AssistPanel onConfirm={confirmFromAssist} onClose={() => setShowAssist(false)} />
       ) : (
         <button
           onClick={() => setShowAssist(true)}
-          className="w-full rounded-xl border border-dashed border-bahari-bright/60 bg-bahari-pale/40 text-bahari-deep text-sm font-semibold py-3 hover:bg-bahari-pale active:scale-[0.99]"
+          className="w-full rounded border border-dashed border-accent/50 bg-accent/5 text-accent text-sm font-medium py-3 hover:bg-accent/10 transition-colors"
         >
           Not sure what you found? Check a photo with AI
         </button>
@@ -60,8 +55,10 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
       {TIER_ORDER.map((group) => (
         <div key={group.key} className="space-y-2">
           <div className="flex items-baseline justify-between">
-            <h3 className="text-sm font-bold text-slate-700">{group.title}</h3>
-            <span className="text-[11px] text-slate-400">{group.hint}</span>
+            <h3 className="text-sm font-medium text-snow">{group.title}</h3>
+            <span className="font-mono text-[10px] uppercase tracking-code text-fog">
+              {group.hint}
+            </span>
           </div>
           <div className="space-y-2">
             {TAXA.filter((t) => t.tier === group.key).map((t) => (
@@ -77,10 +74,10 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
         </div>
       ))}
 
-      <div className="sticky bottom-0 bg-gradient-to-t from-[#f6fafb] via-[#f6fafb] pt-3 pb-1 space-y-2">
-        <p className="text-center text-xs text-slate-500">
+      <div className="sticky bottom-0 bg-gradient-to-t from-ink via-ink to-transparent pt-4 pb-1 space-y-2">
+        <p className="text-center font-mono text-[11px] text-ash" aria-live="polite">
           {found === 0
-            ? 'Record at least one group to see your stream health.'
+            ? 'Record at least one group to see stream health.'
             : `${found} group${found === 1 ? '' : 's'} recorded.`}
         </p>
         <div className="grid grid-cols-[auto_1fr] gap-2">
@@ -100,29 +97,30 @@ function TaxonCard({ taxon, count, onDec, onInc }) {
   return (
     <div
       className={
-        'rounded-xl border px-3 py-2.5 transition ' +
-        (active ? 'border-bahari-bright bg-bahari-pale/60' : 'border-slate-200 bg-white')
+        'rounded border px-3 py-2.5 transition-colors ' +
+        (active ? 'border-accent bg-card' : 'border-steel bg-section')
       }
     >
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-slate-800 text-sm">{taxon.commonName}</span>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-medium text-snow text-sm">{taxon.commonName}</span>
             <TierBadge tier={taxon.tier} />
           </div>
           <button
             onClick={() => setOpen((o) => !o)}
-            className="text-xs text-bahari-mid hover:underline mt-0.5"
+            aria-expanded={open}
+            className="text-xs text-accent hover:underline mt-1"
           >
             {open ? 'Hide' : 'How do I know?'}
           </button>
         </div>
-        <Counter count={count} onDec={onDec} onInc={onInc} />
+        <Counter count={count} onDec={onDec} onInc={onInc} label={taxon.commonName} />
       </div>
       {open && (
-        <p className="text-xs text-slate-600 mt-2 bg-white rounded-lg px-3 py-2 border border-slate-100">
+        <p className="text-xs text-ash mt-2 bg-ink rounded px-3 py-2 border border-steel">
           {taxon.recognise}
-          <span className="block text-[11px] text-slate-400 mt-1">
+          <span className="block font-mono text-[10px] text-fog mt-1">
             Group: {taxon.scientificGroup}
           </span>
         </p>
@@ -131,22 +129,24 @@ function TaxonCard({ taxon, count, onDec, onInc }) {
   );
 }
 
-function Counter({ count, onDec, onInc }) {
+function Counter({ count, onDec, onInc, label }) {
   return (
     <div className="flex items-center gap-2 shrink-0">
       <button
         onClick={onDec}
         disabled={count === 0}
-        aria-label="Fewer"
-        className="w-9 h-9 rounded-full bg-slate-100 text-slate-700 text-xl font-bold grid place-items-center disabled:opacity-30 active:scale-95"
+        aria-label={`One fewer ${label}`}
+        className="w-9 h-9 rounded border border-steel bg-ink text-ash text-xl grid place-items-center disabled:opacity-30 hover:border-graphite transition-colors"
       >
         −
       </button>
-      <span className="w-6 text-center font-bold tabular-nums text-slate-800">{count}</span>
+      <span className="w-6 text-center font-medium tabular-nums text-snow" aria-live="polite">
+        {count}
+      </span>
       <button
         onClick={onInc}
-        aria-label="More"
-        className="w-9 h-9 rounded-full bg-bahari-mid text-white text-xl font-bold grid place-items-center active:scale-95"
+        aria-label={`One more ${label}`}
+        className="w-9 h-9 rounded bg-snow text-ink text-xl grid place-items-center hover:bg-white/90 transition-colors"
       >
         +
       </button>

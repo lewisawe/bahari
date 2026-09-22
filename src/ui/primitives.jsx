@@ -1,32 +1,30 @@
 import React from 'react';
+import { healthColorForClass } from '../core/health-colors.js';
 
-// Small shared UI primitives so the step screens stay consistent + tidy.
+// Dovetail primitives (see DESIGN.md). Dark command-center: white-filled primary
+// buttons, outlined secondary, mono eyebrows, tonal cards, single blue accent.
+// Where DESIGN.md example prompts conflict with its Do/Don'ts + tokens, the
+// Do/Don'ts win: primary = white fill + near-black text + 8px radius; the blue
+// accent never fills a button.
 
-export function TierBadge({ tier }) {
-  const map = {
-    sensitive: { c: 'bg-emerald-100 text-emerald-800', t: 'Sensitive' },
-    moderate: { c: 'bg-amber-100 text-amber-800', t: 'Moderate' },
-    tolerant: { c: 'bg-rose-100 text-rose-800', t: 'Tolerant' },
-  };
-  const m = map[tier] || map.moderate;
-  return (
-    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${m.c}`}>{m.t}</span>
-  );
+export function healthColor(classKey) {
+  return healthColorForClass(classKey);
 }
 
-export function Stepper({ label }) {
-  return null; // placeholder kept for API symmetry; header shows progress instead
+export function Eyebrow({ children, className = '' }) {
+  return <div className={`eyebrow ${className}`}>{children}</div>;
 }
 
-export function PrimaryButton({ children, disabled, onClick, className = '' }) {
+export function PrimaryButton({ children, disabled, onClick, className = '', type = 'button' }) {
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={
-        'w-full rounded-xl px-4 py-3 font-semibold text-white transition ' +
-        'bg-bahari-mid hover:bg-bahari-deep active:scale-[0.99] ' +
-        'disabled:opacity-40 disabled:cursor-not-allowed ' +
+        'w-full rounded px-4 py-2.5 text-sm font-medium transition-colors ' +
+        'bg-snow text-ink hover:bg-white/90 active:bg-white/80 ' +
+        'disabled:bg-card disabled:text-fog disabled:cursor-not-allowed ' +
         className
       }
     >
@@ -35,18 +33,41 @@ export function PrimaryButton({ children, disabled, onClick, className = '' }) {
   );
 }
 
-export function GhostButton({ children, onClick, className = '' }) {
+export function GhostButton({ children, onClick, className = '', type = 'button' }) {
   return (
     <button
+      type={type}
       onClick={onClick}
       className={
-        'rounded-xl px-4 py-3 font-medium text-bahari-deep bg-white ' +
-        'border border-slate-200 hover:bg-slate-50 active:scale-[0.99] transition ' +
+        'rounded px-4 py-2.5 text-sm font-medium transition-colors ' +
+        'bg-transparent text-snow border border-graphite hover:bg-card ' +
         className
       }
     >
       {children}
     </button>
+  );
+}
+
+export function TierBadge({ tier }) {
+  const map = {
+    sensitive: { c: 'text-health-good border-health-good/40', t: 'Sensitive' },
+    moderate: { c: 'text-health-fair border-health-fair/40', t: 'Moderate' },
+    tolerant: { c: 'text-health-bad border-health-bad/40', t: 'Tolerant' },
+  };
+  const m = map[tier] || map.moderate;
+  return (
+    <span
+      className={`font-mono text-[10px] uppercase tracking-code px-1.5 py-0.5 rounded-tag border ${m.c}`}
+    >
+      {m.t}
+    </span>
+  );
+}
+
+export function Card({ children, className = '' }) {
+  return (
+    <div className={`rounded bg-card border border-steel ${className}`}>{children}</div>
   );
 }
 
@@ -57,17 +78,18 @@ export function Stepper2({ steps, activeIndex }) {
         <li key={s.key} className="flex items-center gap-1.5">
           <span
             className={
-              'w-6 h-6 rounded-full grid place-items-center text-[11px] font-bold ' +
+              'w-6 h-6 rounded-full grid place-items-center font-mono text-[11px] ' +
               (i < activeIndex
-                ? 'bg-white text-bahari-deep'
+                ? 'bg-card text-accent border border-accent/50'
                 : i === activeIndex
-                  ? 'bg-bahari-bright text-white ring-2 ring-white/50'
-                  : 'bg-white/25 text-white/70')
+                  ? 'bg-accent text-ink'
+                  : 'bg-card text-fog border border-steel')
             }
+            aria-current={i === activeIndex ? 'step' : undefined}
           >
             {i < activeIndex ? '\u2713' : i + 1}
           </span>
-          {i < steps.length - 1 && <span className="w-4 h-px bg-white/30" />}
+          {i < steps.length - 1 && <span className="w-4 h-px bg-steel" />}
         </li>
       ))}
     </ol>

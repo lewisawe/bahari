@@ -14,7 +14,9 @@ dist/
 
 # internal planning & design docs (not part of the public submission)
 PLAN.md
+PLAN-PHASE2.md
 idea-scorecard.md
+DESIGN.md
 
 # written docs / articles (kept out of the public repo)
 README.md

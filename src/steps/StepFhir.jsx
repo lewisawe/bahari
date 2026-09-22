@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { buildBundle, validateBundle } from '../core/fhir.js';
-import { GhostButton, PrimaryButton } from '../ui/primitives.jsx';
+import { GhostButton, PrimaryButton, Eyebrow } from '../ui/primitives.jsx';
 
 // Step 5 — the FHIR export: the assessment as a standards-compliant health record.
-// Shows a plain-language summary of what's in the Bundle, a validity check, the
-// raw JSON, and a download. This is the "speaks a health-data standard" moment.
+// Plain-language summary, in-app validity check, raw JSON, and download.
+// (Real external validator check is layered on in P1.4.)
 
 export default function StepFhir({ stream, counts, submission, context, onBack, onRestart }) {
   const [showRaw, setShowRaw] = useState(false);
@@ -34,34 +34,33 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-bold text-slate-800">Shareable health record</h2>
-        <p className="text-sm text-slate-500">
-          Bahari packages this assessment as a <b>FHIR</b> record — the standard
-          hospitals and researchers use — so it can flow into real health and
-          research systems, not just stay in an app.
+        <Eyebrow>Step 5 · Share</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">Shareable health record</h2>
+        <p className="text-sm text-ash mt-1">
+          Bahari packages this assessment as a <b className="text-snow">FHIR</b> record,
+          the standard hospitals and researchers use, so it can flow into real health
+          and research systems, not just stay in an app.
         </p>
       </div>
 
       {/* validity badge */}
       <div
-        className={
-          'rounded-2xl border p-4 ' +
-          (validation.valid ? 'border-emerald-200 bg-emerald-50' : 'border-rose-200 bg-rose-50')
-        }
+        className="rounded bg-card border border-steel p-4"
+        style={{ borderLeft: `3px solid ${validation.valid ? '#3ecf8e' : '#ff6b6b'}` }}
       >
         <div className="flex items-center gap-2">
           <span
-            className="w-6 h-6 rounded-full grid place-items-center text-white text-sm font-bold"
-            style={{ background: validation.valid ? '#1a7f5a' : '#c0392b' }}
+            className="w-6 h-6 rounded-full grid place-items-center text-ink text-sm font-bold"
+            style={{ background: validation.valid ? '#3ecf8e' : '#ff6b6b' }}
           >
             {validation.valid ? '\u2713' : '\u2715'}
           </span>
-          <span className="font-bold text-slate-800">
+          <span className="font-medium text-snow">
             {validation.valid ? 'Valid FHIR R4 Bundle' : 'Bundle has issues'}
           </span>
         </div>
         {!validation.valid && (
-          <ul className="mt-2 text-xs text-rose-700 list-disc pl-5">
+          <ul className="mt-2 text-xs text-health-bad list-disc pl-5">
             {validation.errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
@@ -70,13 +69,13 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
       </div>
 
       {/* what's inside, in plain language */}
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <h3 className="text-sm font-bold text-slate-700 mb-2">What's in this record</h3>
+      <div className="rounded bg-section border border-steel p-4">
+        <h3 className="text-sm font-medium text-snow mb-2">What's in this record</h3>
         <ul className="space-y-1.5 text-sm">
           <ResourceLine
             present={resourceList.includes('Location')}
             title="Location"
-            desc="The stream itself — the subject of the record (with coordinates)."
+            desc="The stream itself, the subject of the record (with coordinates)."
           />
           <ResourceLine
             present={counts_.Observation > 0}
@@ -86,13 +85,13 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
           <ResourceLine
             present={resourceList.includes('RiskAssessment')}
             title="RiskAssessment"
-            desc="One Health considerations — qualitative and caveated, never a diagnosis."
+            desc="One Health considerations, qualitative and caveated, never a diagnosis."
           />
         </ul>
-        <p className="text-[11px] text-slate-400 mt-3">
+        <p className="text-[11px] text-fog mt-3">
           The stream is modelled as the record's subject (a non-patient subject),
-          which is how the ecosystem — not a person — becomes the thing being
-          described in a health standard.
+          which is how the ecosystem, not a person, becomes the thing described in a
+          health standard.
         </p>
       </div>
 
@@ -100,12 +99,13 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
       <div>
         <button
           onClick={() => setShowRaw((v) => !v)}
-          className="text-sm font-semibold text-bahari-mid hover:underline"
+          aria-expanded={showRaw}
+          className="text-sm font-medium text-accent hover:underline"
         >
           {showRaw ? 'Hide' : 'Show'} raw FHIR JSON
         </button>
         {showRaw && (
-          <pre className="mt-2 max-h-72 overflow-auto rounded-xl bg-slate-900 text-slate-100 text-[11px] leading-relaxed p-3">
+          <pre className="mt-2 max-h-72 overflow-auto rounded bg-ink border border-steel text-ash font-mono text-[11px] leading-relaxed p-3">
             {JSON.stringify(bundle, null, 2)}
           </pre>
         )}
@@ -126,14 +126,14 @@ function ResourceLine({ present, title, desc }) {
   return (
     <li className="flex items-start gap-2">
       <span
-        className="shrink-0 mt-0.5 w-4 h-4 rounded-full grid place-items-center text-white text-[10px] font-bold"
-        style={{ background: present ? '#127a8a' : '#cbd5e1' }}
+        className="shrink-0 mt-0.5 w-4 h-4 rounded-full grid place-items-center text-ink text-[10px] font-bold"
+        style={{ background: present ? '#6798ff' : '#454545' }}
       >
-        {present ? '\u2713' : '–'}
+        {present ? '\u2713' : '\u2013'}
       </span>
       <div>
-        <span className="font-semibold text-slate-800">{title}</span>
-        <span className="text-slate-500"> — {desc}</span>
+        <span className="font-medium text-snow">{title}</span>
+        <span className="text-ash">, {desc}</span>
       </div>
     </li>
   );

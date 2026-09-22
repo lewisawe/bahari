@@ -38,7 +38,7 @@ describe('Bahari guided flow', () => {
 
     // Step 2: record a sensitive group by tapping its "+" once.
     expect(screen.getByText('What did you find?')).toBeTruthy();
-    const plusButtons = screen.getAllByLabelText('More');
+    const plusButtons = screen.getAllByLabelText(/One more/i);
     fireEvent.click(plusButtons[0]); // first taxon (stonefly, sensitive)
 
     // Advance to result.
