@@ -103,10 +103,19 @@ export default function App() {
 
   return (
     <div className="min-h-screen font-sans text-snow flex flex-col">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[999] focus:top-2 focus:left-2 focus:bg-snow focus:text-ink focus:px-3 focus:py-2 focus:rounded"
+      >
+        Skip to content
+      </a>
       <header className="bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="w-7 h-7 rounded grid place-items-center bg-accent text-ink font-bold text-sm">
+            <span
+              className="w-7 h-7 rounded grid place-items-center bg-accent text-ink font-bold text-sm"
+              aria-hidden="true"
+            >
               B
             </span>
             <div>
@@ -121,17 +130,17 @@ export default function App() {
           )}
         </div>
         {/* view switch */}
-        <div className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
+        <nav aria-label="Views" className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
           <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>
             Assess a stream
           </ViewTab>
           <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>
             Catchment overview
           </ViewTab>
-        </div>
+        </nav>
       </header>
 
-      <main className="flex-1 w-full max-w-xl mx-auto p-5">
+      <main id="main" className="flex-1 w-full max-w-xl mx-auto p-5">
         {view === 'overview' ? (
           <Dashboard
             streams={streams}
