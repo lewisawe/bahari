@@ -30,11 +30,11 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
   const counts_ = validation.resourceCounts;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <Eyebrow>{t('step.fhir.eyebrow')}</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.fhir.title')}</h2>
-        <p className="text-sm text-ash mt-1">
+        <h2 className="text-2xl font-semibold tracking-tight mt-2">{t('step.fhir.title')}</h2>
+        <p className="text-sm text-ash mt-1.5 leading-relaxed">
           Bahari packages this assessment as a <b className="text-snow">FHIR</b> record,
           the standard hospitals and researchers use, so it can flow into real health
           and research systems, not just stay in an app.
@@ -42,10 +42,7 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
       </div>
 
       {/* validity badge */}
-      <div
-        className="rounded bg-card border border-steel p-4"
-        style={{ borderLeft: `3px solid ${validation.valid ? '#3ecf8e' : '#ff6b6b'}` }}
-      >
+      <div className="rounded bg-card border border-steel p-4">
         <div className="flex items-center gap-2">
           <span
             className="w-6 h-6 rounded-full grid place-items-center text-ink text-sm font-bold"

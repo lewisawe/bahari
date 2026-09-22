@@ -33,14 +33,22 @@ const RULES = {
 };
 
 describe('accessibility (axe)', () => {
+  it('landing page has no violations', async () => {
+    const { container } = render(<App />);
+    const results = await axe(container, RULES);
+    expect(results.violations).toEqual([]);
+  });
+
   it('assess view has no violations', async () => {
     const { container } = render(<App />);
+    fireEvent.click(screen.getAllByText('Assess a stream')[0]);
     const results = await axe(container, RULES);
     expect(results.violations).toEqual([]);
   });
 
   it('assess step (find) has no violations', async () => {
     const { container } = render(<App />);
+    fireEvent.click(screen.getAllByText('Assess a stream')[0]);
     fireEvent.click(screen.getByText('Start assessment'));
     const results = await axe(container, RULES);
     expect(results.violations).toEqual([]);
@@ -48,7 +56,7 @@ describe('accessibility (axe)', () => {
 
   it('dashboard view has no violations', async () => {
     const { container } = render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Catchment overview' }));
+    fireEvent.click(screen.getByText('Explore the map'));
     const results = await axe(container, RULES);
     expect(results.violations).toEqual([]);
   });
@@ -58,6 +66,5 @@ describe('accessibility (axe)', () => {
     expect(screen.getByRole('banner')).toBeTruthy(); // header
     expect(screen.getByRole('main')).toBeTruthy();
     expect(screen.getByRole('contentinfo')).toBeTruthy(); // footer
-    expect(screen.getByRole('navigation', { name: /views/i })).toBeTruthy();
   });
 });

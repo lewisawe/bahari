@@ -13,6 +13,7 @@ import StepResult from './steps/StepResult.jsx';
 import StepOneHealth from './steps/StepOneHealth.jsx';
 import StepFhir from './steps/StepFhir.jsx';
 import Dashboard from './Dashboard.jsx';
+import Landing from './Landing.jsx';
 
 // Bahari — guided assessment flow.
 // Step machine: stream -> assess -> result -> onehealth -> fhir.
@@ -31,7 +32,7 @@ export default function App() {
 function AppInner() {
   const { t, lang, setLang } = useT();
   const streams = seed.streams || [];
-  const [view, setView] = useState('assess'); // 'assess' | 'overview'
+  const [view, setView] = useState('home'); // 'home' | 'assess' | 'overview'
   const [stepIndex, setStepIndex] = useState(0);
   const [assessment, setAssessment] = useState(() => newAssessment(streams[0]?.id ?? null));
   const [landUse, setLandUse] = useState('mixed');
@@ -123,8 +124,12 @@ function AppInner() {
         {t('common.skip')}
       </a>
       <header className="grid-motif bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
-        <div className="max-w-xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <button
+            onClick={() => setView('home')}
+            className="flex items-center gap-2.5 text-left"
+            aria-label="Bahari home"
+          >
             <span
               className="w-7 h-7 rounded grid place-items-center bg-accent text-ink font-bold text-sm"
               aria-hidden="true"
@@ -135,29 +140,33 @@ function AppInner() {
               <h1 className="text-base font-semibold tracking-tight leading-none">Bahari</h1>
               <p className="eyebrow mt-1">{t('app.tagline')}</p>
             </div>
-          </div>
+          </button>
           <div className="flex items-center gap-3">
-            {view === 'assess' ? (
-              <Stepper2 steps={STEPS} activeIndex={stepIndex} />
-            ) : (
-              <span className="eyebrow">{t('dash.eyebrow')}</span>
-            )}
+            {view === 'assess' && <Stepper2 steps={STEPS} activeIndex={stepIndex} />}
+            {view === 'overview' && <span className="eyebrow">{t('dash.eyebrow')}</span>}
             <LangToggle lang={lang} setLang={setLang} />
           </div>
         </div>
-        {/* view switch */}
-        <nav aria-label={t('nav.views')} className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
-          <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>
-            {t('nav.assess')}
-          </ViewTab>
-          <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>
-            {t('nav.overview')}
-          </ViewTab>
-        </nav>
+        {/* view switch — not shown on the landing page */}
+        {view !== 'home' && (
+          <nav aria-label={t('nav.views')} className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
+            <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>
+              {t('nav.assess')}
+            </ViewTab>
+            <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>
+              {t('nav.overview')}
+            </ViewTab>
+          </nav>
+        )}
       </header>
 
-      <main id="main" className="flex-1 w-full max-w-xl mx-auto p-5">
-        {view === 'overview' ? (
+      {view === 'home' ? (
+        <main id="main" className="flex-1 w-full">
+          <Landing onStart={() => setView('assess')} onExplore={() => setView('overview')} />
+        </main>
+      ) : (
+        <main id="main" className="flex-1 w-full max-w-xl mx-auto px-5 py-8">
+          {view === 'overview' ? (
           <Dashboard
             streams={streams}
             historyByStream={historyByStream}
@@ -218,7 +227,8 @@ function AppInner() {
             )}
           </>
         )}
-      </main>
+        </main>
+      )}
 
       <footer className="border-t border-steel text-center py-3 px-5">
         <span className="eyebrow">

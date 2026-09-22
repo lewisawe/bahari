@@ -29,11 +29,11 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <Eyebrow>{t('step.assess.eyebrow')}</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.assess.title')}</h2>
-        <p className="text-sm text-ash mt-1">
+        <h2 className="text-2xl font-semibold tracking-tight mt-2">{t('step.assess.title')}</h2>
+        <p className="text-sm text-ash mt-1.5 leading-relaxed">
           Flip a few stones and scoop the streambed. Tap <b className="text-snow">+</b> for
           each kind of creature you see. Not sure? Skip it, record only what you're
           confident about.

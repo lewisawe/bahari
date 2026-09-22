@@ -21,17 +21,31 @@ afterEach(() => {
 
 // Smoke test: since we can't run a live dev server in this environment, this
 // mounts the real app and walks the guided flow to prove the screens render
-// and wire together without runtime crashes.
+// and wire together without runtime crashes. The app lands on the home page;
+// enterApp() clicks the hero CTA to reach the assessment flow.
+
+function enterApp() {
+  // hero CTA on the landing page (first "Assess a stream")
+  fireEvent.click(screen.getAllByText('Assess a stream')[0]);
+}
 
 describe('Bahari guided flow', () => {
-  it('renders the stream picker first', () => {
+  it('renders the landing page first', () => {
     render(<App />);
+    expect(screen.getByText('How it works')).toBeTruthy();
+    expect(screen.getAllByText('Assess a stream').length).toBeGreaterThan(0);
+  });
+
+  it('enters the app and shows the stream picker', () => {
+    render(<App />);
+    enterApp();
     expect(screen.getByText('Which stream are you at?')).toBeTruthy();
     expect(screen.getByText('Start assessment')).toBeTruthy();
   });
 
   it('walks stream -> assess -> result and shows a health class', () => {
     render(<App />);
+    enterApp();
 
     // Step 1: a stream is preselected; advance.
     fireEvent.click(screen.getByText('Start assessment'));
@@ -64,6 +78,7 @@ describe('Bahari guided flow', () => {
 
   it('blocks advancing from assess with no findings', () => {
     render(<App />);
+    enterApp();
     fireEvent.click(screen.getByText('Start assessment'));
     const next = screen.getByText('See stream health');
     expect(next.disabled).toBe(true);
@@ -71,6 +86,7 @@ describe('Bahari guided flow', () => {
 
   it('opens the AI assist panel and can run it without crashing', () => {
     render(<App />);
+    enterApp();
     fireEvent.click(screen.getByText('Start assessment'));
     fireEvent.click(screen.getByText(/Check a photo with AI/i));
     // panel visible
@@ -82,8 +98,8 @@ describe('Bahari guided flow', () => {
 
   it('switches to the researcher dashboard and shows aggregate stats', () => {
     render(<App />);
-    // the view tab (button) — distinct from the dashboard's h2 of the same text
-    fireEvent.click(screen.getByRole('button', { name: 'Catchment overview' }));
+    // from the landing page, the "Explore the map" CTA opens the dashboard
+    fireEvent.click(screen.getByText('Explore the map'));
     expect(screen.getByText('Health distribution')).toBeTruthy();
     expect(screen.getByText(/most stressed first/i)).toBeTruthy();
   });
@@ -91,7 +107,7 @@ describe('Bahari guided flow', () => {
   it('switches language to French and translates the UI', () => {
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: 'Français' }));
-    // the start button label is now French
-    expect(screen.getByText(/Commencer l/i)).toBeTruthy();
+    // the landing hero CTA label is now French
+    expect(screen.getAllByText(/Évaluer un cours/i).length).toBeGreaterThan(0);
   });
 });

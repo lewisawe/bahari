@@ -23,28 +23,28 @@ export default function StepOneHealth({ counts, context, onBack, onNext }) {
   const overall = LEVEL[oh.overall];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <Eyebrow>{t('step.oneHealth.eyebrow')}</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.oneHealth.title')}</h2>
-        <p className="text-sm text-ash mt-1">
+        <h2 className="text-2xl font-semibold tracking-tight mt-2">{t('step.oneHealth.title')}</h2>
+        <p className="text-sm text-ash mt-1.5 leading-relaxed">
           What this stream signal may mean for people, animals, and the ecosystem,
           the connected view behind One Health.
         </p>
       </div>
 
-      {/* overall banner — flat card with accent left border */}
-      <div
-        className="rounded bg-card border border-steel p-4"
-        style={{ borderLeft: `3px solid ${overall.c}` }}
-      >
-        <span
-          className="font-mono text-[11px] uppercase tracking-code"
-          style={{ color: overall.c }}
-        >
-          {overall.label}
-        </span>
-        <p className="text-sm text-snow mt-1">{oh.summary}</p>
+      {/* overall banner — flat card, level color carried by a dot + label */}
+      <div className="rounded bg-card border border-steel p-4">
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: overall.c }} aria-hidden="true" />
+          <span
+            className="font-mono text-[11px] uppercase tracking-code"
+            style={{ color: overall.c }}
+          >
+            {overall.label}
+          </span>
+        </div>
+        <p className="text-sm text-snow mt-2 leading-relaxed">{oh.summary}</p>
       </div>
 
       {/* context row */}
@@ -87,10 +87,7 @@ function FlagCard({ flag }) {
   const s = LEVEL[flag.level];
   const a = AUDIENCE[flag.audience] || AUDIENCE.ecosystem;
   return (
-    <div
-      className="rounded bg-section border border-steel p-3"
-      style={{ borderLeft: `3px solid ${s.c}` }}
-    >
+    <div className="rounded bg-section border border-steel p-3.5">
       <div className="flex items-start gap-2.5">
         <span className="text-lg leading-none mt-0.5" aria-hidden>
           {a.icon}
@@ -99,20 +96,21 @@ function FlagCard({ flag }) {
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-snow">{flag.title}</span>
             <span
-              className="font-mono text-[10px] uppercase tracking-code px-1.5 py-0.5 rounded-tag border"
+              className="font-mono text-[10px] uppercase tracking-code px-1.5 py-0.5 rounded-tag border inline-flex items-center gap-1"
               style={{ color: s.c, borderColor: `${s.c}66` }}
             >
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: s.c }} aria-hidden="true" />
               {s.label}
             </span>
           </div>
-          <p className="text-xs text-ash mt-1">{flag.reason}</p>
+          <p className="text-xs text-ash mt-1.5 leading-relaxed">{flag.reason}</p>
           {flag.note && <p className="text-[11px] text-fog mt-1">{flag.note}</p>}
-          <details className="mt-1.5">
+          <details className="mt-2">
             <summary className="text-[11px] text-accent cursor-pointer">Why &amp; limits</summary>
-            <p className="text-[11px] text-fog mt-1">
+            <p className="text-[11px] text-fog mt-1.5 leading-relaxed">
               <b className="text-ash">Basis:</b> {flag.basis}
             </p>
-            <p className="text-[11px] text-fog mt-0.5">
+            <p className="text-[11px] text-fog mt-1 leading-relaxed">
               <b className="text-ash">Limits:</b> {flag.limits}
             </p>
           </details>

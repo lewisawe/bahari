@@ -26,6 +26,9 @@ valid FHIR record that real health and research systems can ingest.
 Plus a **researcher dashboard**: every stream on a map, with aggregate health
 distribution, trends, and a most-stressed-first table.
 
+The app opens on a landing page that tells the One Health story, then leads into
+the assessment flow.
+
 ## Run locally
 
 ```bash

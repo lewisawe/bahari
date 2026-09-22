@@ -21,21 +21,18 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
   const color = healthColor(result.classKey);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       <div>
         <Eyebrow>{t('step.result.eyebrow')}</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.result.title')}</h2>
-        {streamName && <p className="text-sm text-ash mt-1">{streamName}</p>}
+        <h2 className="text-2xl font-semibold tracking-tight mt-2">{t('step.result.title')}</h2>
+        {streamName && <p className="text-sm text-ash mt-1.5">{streamName}</p>}
       </div>
 
-      {/* Headline result — flat card, accent left-border in the health color */}
-      <div
-        className="rounded bg-card border border-steel p-5"
-        style={{ borderLeft: `3px solid ${color}` }}
-      >
-        <div className="flex items-center gap-4">
+      {/* Headline result — flat card, health color carried by the numerals and dot */}
+      <div className="rounded bg-card border border-steel p-6">
+        <div className="flex items-center gap-5">
           <div
-            className="w-20 h-20 rounded-full grid place-items-center border-2"
+            className="w-20 h-20 rounded-full grid place-items-center border-2 shrink-0"
             style={{ borderColor: color }}
           >
             <span className="text-3xl font-semibold tabular-nums" style={{ color }}>
@@ -43,10 +40,13 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
             </span>
           </div>
           <div>
-            <div className="text-2xl font-semibold" style={{ color }}>
-              {c.label}
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} aria-hidden="true" />
+              <div className="text-2xl font-semibold" style={{ color }}>
+                {c.label}
+              </div>
             </div>
-            <div className="text-ash text-sm mt-0.5">{c.blurb}</div>
+            <div className="text-ash text-sm mt-1.5 leading-relaxed">{c.blurb}</div>
           </div>
         </div>
       </div>

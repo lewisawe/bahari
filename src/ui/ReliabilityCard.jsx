@@ -13,14 +13,14 @@ export default function ReliabilityCard({ submission }) {
   const color = BAND_COLOR[r.band] || '#a7a7a7';
 
   return (
-    <div
-      className="rounded bg-section border border-steel p-4"
-      style={{ borderLeft: `3px solid ${color}` }}
-    >
+    <div className="rounded bg-section border border-steel p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="text-sm font-medium text-snow">Data reliability</h3>
-          <p className="text-xs text-ash">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} aria-hidden="true" />
+            <h3 className="text-sm font-medium text-snow">Data reliability</h3>
+          </div>
+          <p className="text-xs text-ash mt-1">
             How much a researcher can trust this record, separate from stream health.
           </p>
         </div>
