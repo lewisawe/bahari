@@ -1,12 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { buildBundle, validateBundle } from '../core/fhir.js';
 import { GhostButton, PrimaryButton, Eyebrow } from '../ui/primitives.jsx';
-
-// Step 5 — the FHIR export: the assessment as a standards-compliant health record.
-// Plain-language summary, in-app validity check, raw JSON, and download.
-// (Real external validator check is layered on in P1.4.)
+import { useT } from '../i18n/I18n.jsx';
 
 export default function StepFhir({ stream, counts, submission, context, onBack, onRestart }) {
+  const { t } = useT();
   const [showRaw, setShowRaw] = useState(false);
 
   const bundle = useMemo(
@@ -34,8 +32,8 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
   return (
     <div className="space-y-4">
       <div>
-        <Eyebrow>Step 5 · Share</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">Shareable health record</h2>
+        <Eyebrow>{t('step.fhir.eyebrow')}</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.fhir.title')}</h2>
         <p className="text-sm text-ash mt-1">
           Bahari packages this assessment as a <b className="text-snow">FHIR</b> record,
           the standard hospitals and researchers use, so it can flow into real health
@@ -56,7 +54,7 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
             {validation.valid ? '\u2713' : '\u2715'}
           </span>
           <span className="font-medium text-snow">
-            {validation.valid ? 'Valid FHIR R4 Bundle' : 'Bundle has issues'}
+            {validation.valid ? t('step.fhir.valid') : 'Bundle has issues'}
           </span>
         </div>
         {!validation.valid && (
@@ -116,10 +114,10 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
       </div>
 
       <div className="space-y-2">
-        <PrimaryButton onClick={download}>Download FHIR record (.json)</PrimaryButton>
+        <PrimaryButton onClick={download}>{t('step.fhir.download')}</PrimaryButton>
         <div className="grid grid-cols-2 gap-2">
-          <GhostButton onClick={onBack}>Back</GhostButton>
-          <GhostButton onClick={onRestart}>New assessment</GhostButton>
+          <GhostButton onClick={onBack}>{t('common.back')}</GhostButton>
+          <GhostButton onClick={onRestart}>{t('step.result.restart')}</GhostButton>
         </div>
       </div>
     </div>

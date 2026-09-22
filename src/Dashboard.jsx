@@ -2,21 +2,19 @@ import React, { Suspense, lazy } from 'react';
 import { aggregate } from './core/aggregate.js';
 import { Eyebrow } from './ui/primitives.jsx';
 import { healthColorForClass } from './core/health-colors.js';
+import { useT } from './i18n/I18n.jsx';
 
 const StreamMap = lazy(() => import('./ui/StreamMap.jsx'));
 
-// Researcher / aggregate dashboard — the "data-to-insight at scale" view.
-// Shows every stream on a map + catchment-level stats, turning many citizen
-// assessments into a monitoring picture. Read-only.
-
 export default function Dashboard({ streams = [], historyByStream = {}, onOpenStream }) {
+  const { t } = useT();
   const a = aggregate(streams, historyByStream);
 
   return (
     <div className="space-y-5">
       <div>
-        <Eyebrow>Researcher view</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">Catchment overview</h2>
+        <Eyebrow>{t('dash.eyebrow')}</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('dash.title')}</h2>
         <p className="text-sm text-ash mt-1">
           Every monitoring point, aggregated. Citizen assessments become a
           catchment-scale picture researchers and authorities can act on.
@@ -54,7 +52,7 @@ export default function Dashboard({ streams = [], historyByStream = {}, onOpenSt
 
       {/* health-class distribution */}
       <div className="rounded bg-section border border-steel p-4">
-        <h3 className="text-sm font-medium text-snow mb-3">Health distribution</h3>
+        <h3 className="text-sm font-medium text-snow mb-3">{t('dash.distribution')}</h3>
         <div className="space-y-2">
           {a.distribution.map((d) => (
             <div key={d.key} className="flex items-center gap-3">
@@ -81,7 +79,7 @@ export default function Dashboard({ streams = [], historyByStream = {}, onOpenSt
       {/* worst-first stream table */}
       <div className="rounded bg-section border border-steel overflow-hidden">
         <div className="px-4 py-2.5 border-b border-steel">
-          <h3 className="text-sm font-medium text-snow">Streams (most stressed first)</h3>
+          <h3 className="text-sm font-medium text-snow">{t('dash.streams')}</h3>
         </div>
         <div className="max-h-[40vh] overflow-y-auto">
           <table className="w-full text-sm">

@@ -87,4 +87,11 @@ describe('Bahari guided flow', () => {
     expect(screen.getByText('Health distribution')).toBeTruthy();
     expect(screen.getByText(/most stressed first/i)).toBeTruthy();
   });
+
+  it('switches language to French and translates the UI', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Français' }));
+    // the start button label is now French
+    expect(screen.getByText(/Commencer l/i)).toBeTruthy();
+  });
 });

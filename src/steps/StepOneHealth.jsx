@@ -2,10 +2,7 @@ import React from 'react';
 import { scoreAssessment } from '../core/biotic-index.js';
 import { translateOneHealth } from '../core/one-health.js';
 import { GhostButton, PrimaryButton, Eyebrow } from '../ui/primitives.jsx';
-
-// Step 4 — One Health translation.
-// Qualitative, explainable, caveated considerations for people and animals.
-// Dark tonal cards; the level color is an accent stroke, not a fill.
+import { useT } from '../i18n/I18n.jsx';
 
 const AUDIENCE = {
   ecosystem: { label: 'Ecosystem', icon: '\u{1F30A}' },
@@ -20,6 +17,7 @@ const LEVEL = {
 };
 
 export default function StepOneHealth({ counts, context, onBack, onNext }) {
+  const { t } = useT();
   const biotic = scoreAssessment(counts);
   const oh = translateOneHealth({ classKey: biotic.classKey, context });
   const overall = LEVEL[oh.overall];
@@ -27,8 +25,8 @@ export default function StepOneHealth({ counts, context, onBack, onNext }) {
   return (
     <div className="space-y-4">
       <div>
-        <Eyebrow>Step 4 · One Health</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">One Health considerations</h2>
+        <Eyebrow>{t('step.oneHealth.eyebrow')}</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.oneHealth.title')}</h2>
         <p className="text-sm text-ash mt-1">
           What this stream signal may mean for people, animals, and the ecosystem,
           the connected view behind One Health.
@@ -78,8 +76,8 @@ export default function StepOneHealth({ counts, context, onBack, onNext }) {
       </div>
 
       <div className="grid grid-cols-[auto_1fr] gap-2">
-        <GhostButton onClick={onBack}>Back</GhostButton>
-        <PrimaryButton onClick={onNext}>Create shareable record</PrimaryButton>
+        <GhostButton onClick={onBack}>{t('common.back')}</GhostButton>
+        <PrimaryButton onClick={onNext}>{t('step.oneHealth.next')}</PrimaryButton>
       </div>
     </div>
   );

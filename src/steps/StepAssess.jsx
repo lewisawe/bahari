@@ -2,11 +2,10 @@ import React, { useState } from 'react';
 import { TAXA } from '../core/taxa.js';
 import { groupsFound } from '../core/assessment.js';
 import { TierBadge, PrimaryButton, GhostButton, Eyebrow } from '../ui/primitives.jsx';
+import { useT } from '../i18n/I18n.jsx';
 import AssistPanel from '../ui/AssistPanel.jsx';
 
 // Step 2 — guided "what did you find?" recording.
-// Mobile-first taxa cards grouped by sensitivity tier, jargon-free, with a
-// tap-friendly counter and a "how to recognise" hint.
 
 const TIER_ORDER = [
   { key: 'sensitive', title: 'Clean-water lovers', hint: 'Only live where water is healthy.' },
@@ -15,6 +14,7 @@ const TIER_ORDER = [
 ];
 
 export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack, onNext }) {
+  const { t } = useT();
   const found = groupsFound(counts);
   const [showAssist, setShowAssist] = useState(false);
 
@@ -31,8 +31,8 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
   return (
     <div className="space-y-4">
       <div>
-        <Eyebrow>Step 2 · Find</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">What did you find?</h2>
+        <Eyebrow>{t('step.assess.eyebrow')}</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.assess.title')}</h2>
         <p className="text-sm text-ash mt-1">
           Flip a few stones and scoop the streambed. Tap <b className="text-snow">+</b> for
           each kind of creature you see. Not sure? Skip it, record only what you're
@@ -48,7 +48,7 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
           onClick={() => setShowAssist(true)}
           className="w-full rounded border border-dashed border-accent/50 bg-accent/5 text-accent text-sm font-medium py-3 hover:bg-accent/10 transition-colors"
         >
-          Not sure what you found? Check a photo with AI
+          {t('step.assess.aiCta')}
         </button>
       )}
 
@@ -81,9 +81,9 @@ export default function StepAssess({ counts, onChange, onPhotoConfirmed, onBack,
             : `${found} group${found === 1 ? '' : 's'} recorded.`}
         </p>
         <div className="grid grid-cols-[auto_1fr] gap-2">
-          <GhostButton onClick={onBack}>Back</GhostButton>
+          <GhostButton onClick={onBack}>{t('common.back')}</GhostButton>
           <PrimaryButton disabled={found === 0} onClick={onNext}>
-            See stream health
+            {t('step.assess.next')}
           </PrimaryButton>
         </div>
       </div>

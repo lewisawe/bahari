@@ -1,13 +1,11 @@
 import React from 'react';
 import { scoreAssessment } from '../core/biotic-index.js';
 import { GhostButton, PrimaryButton, Eyebrow, healthColor } from '../ui/primitives.jsx';
+import { useT } from '../i18n/I18n.jsx';
 import ReliabilityCard from '../ui/ReliabilityCard.jsx';
 
-// Step 3 — the ecological health result + data-reliability.
-// Flat, tonal, instrument-panel treatment (no gradients per DESIGN.md): the
-// health color is used as an accent value/stroke, not a fill.
-
 export default function StepResult({ counts, streamName, submission, onBack, onNext, onRestart }) {
+  const { t } = useT();
   const result = scoreAssessment(counts);
   const c = result.classInfo;
 
@@ -15,7 +13,7 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
     return (
       <div className="space-y-4">
         <p className="text-ash">{result.method}</p>
-        <GhostButton onClick={onBack}>Back to recording</GhostButton>
+        <GhostButton onClick={onBack}>{t('common.back')}</GhostButton>
       </div>
     );
   }
@@ -25,8 +23,8 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
   return (
     <div className="space-y-5">
       <div>
-        <Eyebrow>Step 3 · Result</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">Stream health</h2>
+        <Eyebrow>{t('step.result.eyebrow')}</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.result.title')}</h2>
         {streamName && <p className="text-sm text-ash mt-1">{streamName}</p>}
       </div>
 
@@ -77,7 +75,7 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
       {/* Transparent method */}
       <details className="bg-section rounded border border-steel px-4 py-3">
         <summary className="text-sm font-medium text-snow cursor-pointer">
-          How this score is calculated
+          {t('step.result.method')}
         </summary>
         <p className="text-sm text-ash mt-2">{result.method}</p>
         <p className="text-xs text-fog mt-2">
@@ -91,10 +89,10 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
       {submission && <ReliabilityCard submission={submission} />}
 
       <div className="space-y-2">
-        <PrimaryButton onClick={onNext}>See One Health considerations</PrimaryButton>
+        <PrimaryButton onClick={onNext}>{t('step.result.next')}</PrimaryButton>
         <div className="grid grid-cols-2 gap-2">
-          <GhostButton onClick={onBack}>Edit finds</GhostButton>
-          <GhostButton onClick={onRestart}>New assessment</GhostButton>
+          <GhostButton onClick={onBack}>{t('step.result.edit')}</GhostButton>
+          <GhostButton onClick={onRestart}>{t('step.result.restart')}</GhostButton>
         </div>
       </div>
     </div>

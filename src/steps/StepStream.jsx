@@ -3,18 +3,13 @@ import seed from '../data/seed-streams.json';
 import { PrimaryButton, Eyebrow, healthColor } from '../ui/primitives.jsx';
 import { LAND_USES } from '../core/context.js';
 import { trend } from '../core/history.js';
+import { useT } from '../i18n/I18n.jsx';
 import Sparkline from '../ui/Sparkline.jsx';
 
-// Map is lazy-loaded so Leaflet stays out of the initial bundle and never loads
-// in non-browser/test environments. The list below is the always-present
-// fallback (and the accessible way to pick a stream).
 const StreamMap = lazy(() => import('../ui/StreamMap.jsx'));
 
-// Step 1 — pick the stream you're standing at.
-// Real GBIF-seeded locations; shows "your stream" history (seed sample + your
-// own saved assessments) as a trend. Also captures land-use context.
-
 export default function StepStream({ streamId, onPick, landUse, onLandUse, historyByStream = {}, onNext }) {
+  const { t } = useT();
   const streams = seed.streams || [];
   const selected = streams.find((s) => s.id === streamId) || null;
   const [showMap, setShowMap] = useState(true);
@@ -22,21 +17,18 @@ export default function StepStream({ streamId, onPick, landUse, onLandUse, histo
   return (
     <div className="space-y-5">
       <div>
-        <Eyebrow>Step 1 · Location</Eyebrow>
-        <h2 className="text-2xl font-semibold tracking-tight mt-1">Which stream are you at?</h2>
-        <p className="text-sm text-ash mt-1">
-          Pick a monitoring point. These are real locations from the GBIF open
-          biodiversity database.
-        </p>
+        <Eyebrow>{t('step.stream.eyebrow')}</Eyebrow>
+        <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('step.stream.title')}</h2>
+        <p className="text-sm text-ash mt-1">{t('step.stream.intro')}</p>
       </div>
 
       <div className="flex items-center justify-between">
-        <Eyebrow>{streams.length} monitoring points</Eyebrow>
+        <Eyebrow>{t('step.stream.points', { n: streams.length })}</Eyebrow>
         <button
           onClick={() => setShowMap((v) => !v)}
           className="font-mono text-[11px] uppercase tracking-code text-accent hover:underline"
         >
-          {showMap ? 'Hide map' : 'Show map'}
+          {showMap ? t('step.stream.hideMap') : t('step.stream.showMap')}
         </button>
       </div>
 
@@ -100,7 +92,7 @@ export default function StepStream({ streamId, onPick, landUse, onLandUse, histo
       {/* Land-use context (feeds the One Health translation) */}
       <div>
         <label className="block text-sm font-medium text-snow mb-2">
-          What's around this stream?
+          {t('step.stream.landUse')}
         </label>
         <div className="grid grid-cols-2 gap-2">
           {LAND_USES.map((l) => {
@@ -125,7 +117,7 @@ export default function StepStream({ streamId, onPick, landUse, onLandUse, histo
       </div>
 
       <PrimaryButton disabled={!streamId} onClick={onNext}>
-        Start assessment
+        {t('step.stream.start')}
       </PrimaryButton>
     </div>
   );

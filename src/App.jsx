@@ -5,6 +5,8 @@ import { buildContext, fetchRecentRain } from './core/context.js';
 import { scoreAssessment } from './core/biotic-index.js';
 import { loadUserHistory, saveAssessment, mergedHistory } from './core/history.js';
 import { Stepper2 } from './ui/primitives.jsx';
+import { I18nProvider, useT } from './i18n/I18n.jsx';
+import { LANGUAGES } from './i18n/strings.js';
 import StepStream from './steps/StepStream.jsx';
 import StepAssess from './steps/StepAssess.jsx';
 import StepResult from './steps/StepResult.jsx';
@@ -16,7 +18,18 @@ import Dashboard from './Dashboard.jsx';
 // Step machine: stream -> assess -> result -> onehealth -> fhir.
 // Plus a researcher "overview" dashboard view.
 
+// App is wrapped in its own I18nProvider so it works standalone (and in tests)
+// without callers needing to provide one.
 export default function App() {
+  return (
+    <I18nProvider>
+      <AppInner />
+    </I18nProvider>
+  );
+}
+
+function AppInner() {
+  const { t, lang, setLang } = useT();
   const streams = seed.streams || [];
   const [view, setView] = useState('assess'); // 'assess' | 'overview'
   const [stepIndex, setStepIndex] = useState(0);
@@ -107,7 +120,7 @@ export default function App() {
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:z-[999] focus:top-2 focus:left-2 focus:bg-snow focus:text-ink focus:px-3 focus:py-2 focus:rounded"
       >
-        Skip to content
+        {t('common.skip')}
       </a>
       <header className="bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
         <div className="max-w-xl mx-auto flex items-center justify-between">
@@ -120,22 +133,25 @@ export default function App() {
             </span>
             <div>
               <h1 className="text-base font-semibold tracking-tight leading-none">Bahari</h1>
-              <p className="eyebrow mt-1">Citizen stream health</p>
+              <p className="eyebrow mt-1">{t('app.tagline')}</p>
             </div>
           </div>
-          {view === 'assess' ? (
-            <Stepper2 steps={STEPS} activeIndex={stepIndex} />
-          ) : (
-            <span className="eyebrow">Researcher view</span>
-          )}
+          <div className="flex items-center gap-3">
+            {view === 'assess' ? (
+              <Stepper2 steps={STEPS} activeIndex={stepIndex} />
+            ) : (
+              <span className="eyebrow">{t('dash.eyebrow')}</span>
+            )}
+            <LangToggle lang={lang} setLang={setLang} />
+          </div>
         </div>
         {/* view switch */}
-        <nav aria-label="Views" className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
+        <nav aria-label={t('nav.views')} className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
           <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>
-            Assess a stream
+            {t('nav.assess')}
           </ViewTab>
           <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>
-            Catchment overview
+            {t('nav.overview')}
           </ViewTab>
         </nav>
       </header>
@@ -225,5 +241,26 @@ function ViewTab({ active, onClick, children }) {
     >
       {children}
     </button>
+  );
+}
+
+function LangToggle({ lang, setLang }) {
+  return (
+    <div className="flex items-center gap-0.5 bg-section border border-steel rounded p-0.5" role="group" aria-label="Language">
+      {LANGUAGES.map((l) => (
+        <button
+          key={l.code}
+          onClick={() => setLang(l.code)}
+          aria-pressed={lang === l.code}
+          aria-label={l.name}
+          className={
+            'font-mono text-[10px] uppercase tracking-code px-1.5 py-1 rounded-tag transition-colors ' +
+            (lang === l.code ? 'bg-card text-snow' : 'text-ash hover:text-snow')
+          }
+        >
+          {l.label}
+        </button>
+      ))}
+    </div>
   );
 }

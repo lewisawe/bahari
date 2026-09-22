@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-22T20:04:20.459Z",
+  "generatedAt": "2026-09-22T20:22:28.181Z",
   "source": "GBIF occurrence API — https://api.gbif.org/v1/occurrence/search",
   "note": "Coordinates, localities and which indicator groups occur at each point are REAL (from GBIF). Individual counts and historical assessment dates/scores are SYNTHETIC, generated from the real taxa presence, and flagged synthetic:true. No invented data is presented as real.",
   "streamCount": 24,
@@ -18,7 +18,7 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 2,
-            "caddisfly": 4,
+            "caddisfly": 5,
             "riffle_beetle": 3
           },
           "synthetic": true
@@ -29,21 +29,20 @@
           "classKey": "good",
           "counts": {
             "stonefly": 2,
-            "caddisfly": 4,
+            "caddisfly": 5,
             "riffle_beetle": 3,
-            "true_fly_larva": 2
+            "true_fly_larva": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 7.3,
+          "score": 6.3,
           "classKey": "good",
           "counts": {
-            "stonefly": 2,
-            "caddisfly": 4,
+            "caddisfly": 5,
             "riffle_beetle": 3,
-            "true_fly_larva": 2
+            "true_fly_larva": 5
           },
           "synthetic": true
         },
@@ -53,9 +52,9 @@
           "classKey": "good",
           "counts": {
             "stonefly": 2,
-            "caddisfly": 4,
+            "caddisfly": 5,
             "riffle_beetle": 3,
-            "true_fly_larva": 2
+            "true_fly_larva": 5
           },
           "synthetic": true
         }
@@ -71,22 +70,21 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 7.7,
+          "score": 8,
           "classKey": "natural",
           "counts": {
             "stonefly": 6,
-            "riffle_beetle": 3,
-            "dragonfly": 3
+            "dragonfly": 1
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 6.5,
+          "classKey": "good",
           "counts": {
-            "stonefly": 6,
-            "riffle_beetle": 3
+            "riffle_beetle": 5,
+            "dragonfly": 1
           },
           "synthetic": true
         },
@@ -96,8 +94,8 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 6,
-            "riffle_beetle": 3,
-            "dragonfly": 3
+            "riffle_beetle": 5,
+            "dragonfly": 1
           },
           "synthetic": true
         },
@@ -107,8 +105,8 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 6,
-            "riffle_beetle": 3,
-            "dragonfly": 3
+            "riffle_beetle": 5,
+            "dragonfly": 1
           },
           "synthetic": true
         }
@@ -127,29 +125,29 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 6
+            "stonefly": 4,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 7,
-          "classKey": "good",
+          "score": 8.5,
+          "classKey": "natural",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 6,
-            "snail": 2
+            "stonefly": 4,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 7,
+          "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 6
+            "stonefly": 4,
+            "riffle_beetle": 5,
+            "snail": 3
           },
           "synthetic": true
         },
@@ -158,9 +156,9 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 6,
-            "snail": 2
+            "stonefly": 4,
+            "riffle_beetle": 5,
+            "snail": 3
           },
           "synthetic": true
         }
@@ -179,30 +177,29 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 1,
+            "stonefly": 3,
             "snail": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 7,
-          "classKey": "good",
+          "score": 5.5,
+          "classKey": "fair",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 1,
+            "riffle_beetle": 5,
             "snail": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 7,
+          "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 1
+            "stonefly": 3,
+            "riffle_beetle": 5,
+            "snail": 5
           },
           "synthetic": true
         },
@@ -211,8 +208,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 1,
+            "stonefly": 3,
+            "riffle_beetle": 5,
             "snail": 5
           },
           "synthetic": true
@@ -229,33 +226,32 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 7.3,
-          "classKey": "good",
+          "score": 7.5,
+          "classKey": "natural",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 5,
+            "stonefly": 3,
             "freshwater_shrimp": 4
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 7.3,
+          "score": 6,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 5,
+            "riffle_beetle": 4,
             "freshwater_shrimp": 4
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 7.3,
+          "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 5
+            "stonefly": 3,
+            "riffle_beetle": 4,
+            "freshwater_shrimp": 4
           },
           "synthetic": true
         },
@@ -264,8 +260,8 @@
           "score": 7.3,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 5,
+            "stonefly": 3,
+            "riffle_beetle": 4,
             "freshwater_shrimp": 4
           },
           "synthetic": true
@@ -282,11 +278,10 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 7,
-          "classKey": "good",
+          "score": 5.5,
+          "classKey": "fair",
           "counts": {
-            "stonefly": 3,
-            "riffle_beetle": 2,
+            "riffle_beetle": 6,
             "true_fly_larva": 2
           },
           "synthetic": true
@@ -296,8 +291,7 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 3,
-            "riffle_beetle": 2,
+            "stonefly": 2,
             "true_fly_larva": 2
           },
           "synthetic": true
@@ -307,7 +301,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 3,
+            "stonefly": 2,
+            "riffle_beetle": 6,
             "true_fly_larva": 2
           },
           "synthetic": true
@@ -317,8 +312,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 3,
-            "riffle_beetle": 2,
+            "stonefly": 2,
+            "riffle_beetle": 6,
             "true_fly_larva": 2
           },
           "synthetic": true
@@ -339,17 +334,17 @@
           "classKey": "fair",
           "counts": {
             "riffle_beetle": 3,
-            "snail": 3
+            "snail": 1
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 7,
+          "classKey": "good",
           "counts": {
-            "stonefly": 6,
-            "riffle_beetle": 3
+            "stonefly": 4,
+            "snail": 1
           },
           "synthetic": true
         },
@@ -358,9 +353,9 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 6,
+            "stonefly": 4,
             "riffle_beetle": 3,
-            "snail": 3
+            "snail": 1
           },
           "synthetic": true
         },
@@ -369,9 +364,9 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 6,
+            "stonefly": 4,
             "riffle_beetle": 3,
-            "snail": 3
+            "snail": 1
           },
           "synthetic": true
         }
@@ -387,11 +382,12 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 7,
+          "classKey": "good",
           "counts": {
-            "stonefly": 6,
-            "riffle_beetle": 4
+            "stonefly": 2,
+            "riffle_beetle": 5,
+            "true_fly_larva": 5
           },
           "synthetic": true
         },
@@ -400,19 +396,19 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 6,
-            "riffle_beetle": 4,
-            "true_fly_larva": 1
+            "stonefly": 2,
+            "riffle_beetle": 5,
+            "true_fly_larva": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 7,
+          "classKey": "good",
           "counts": {
-            "stonefly": 6,
-            "riffle_beetle": 4
+            "stonefly": 2,
+            "true_fly_larva": 5
           },
           "synthetic": true
         },
@@ -421,9 +417,9 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 6,
-            "riffle_beetle": 4,
-            "true_fly_larva": 1
+            "stonefly": 2,
+            "riffle_beetle": 5,
+            "true_fly_larva": 5
           },
           "synthetic": true
         }
@@ -439,22 +435,20 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 7,
-          "classKey": "good",
+          "score": 5.5,
+          "classKey": "fair",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 3,
+            "riffle_beetle": 6,
             "snail": 2
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 7,
-          "classKey": "good",
+          "score": 5.5,
+          "classKey": "fair",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 3,
+            "riffle_beetle": 6,
             "snail": 2
           },
           "synthetic": true
@@ -464,7 +458,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
+            "stonefly": 5,
+            "riffle_beetle": 6,
             "snail": 2
           },
           "synthetic": true
@@ -474,8 +469,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 1,
-            "riffle_beetle": 3,
+            "stonefly": 5,
+            "riffle_beetle": 6,
             "snail": 2
           },
           "synthetic": true
@@ -492,21 +487,21 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 8.5,
-          "classKey": "natural",
+          "score": 6,
+          "classKey": "good",
           "counts": {
-            "mayfly": 6,
-            "caddisfly": 1
+            "caddisfly": 2,
+            "snail": 5
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 6.5,
+          "score": 6,
           "classKey": "good",
           "counts": {
-            "mayfly": 6,
-            "snail": 2
+            "caddisfly": 2,
+            "snail": 5
           },
           "synthetic": true
         },
@@ -515,9 +510,9 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "mayfly": 6,
-            "caddisfly": 1,
-            "snail": 2
+            "mayfly": 1,
+            "caddisfly": 2,
+            "snail": 5
           },
           "synthetic": true
         },
@@ -526,9 +521,9 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "mayfly": 6,
-            "caddisfly": 1,
-            "snail": 2
+            "mayfly": 1,
+            "caddisfly": 2,
+            "snail": 5
           },
           "synthetic": true
         }
@@ -547,30 +542,30 @@
           "score": 5.3,
           "classKey": "fair",
           "counts": {
-            "caddisfly": 6,
-            "snail": 6,
-            "true_fly_larva": 3
+            "caddisfly": 3,
+            "snail": 1,
+            "true_fly_larva": 4
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 6,
-          "classKey": "good",
+          "score": 5.3,
+          "classKey": "fair",
           "counts": {
-            "caddisfly": 6,
-            "true_fly_larva": 3
+            "caddisfly": 3,
+            "snail": 1,
+            "true_fly_larva": 4
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 5.3,
-          "classKey": "fair",
+          "score": 6,
+          "classKey": "good",
           "counts": {
-            "caddisfly": 6,
-            "snail": 6,
-            "true_fly_larva": 3
+            "caddisfly": 3,
+            "true_fly_larva": 4
           },
           "synthetic": true
         },
@@ -579,9 +574,9 @@
           "score": 5.3,
           "classKey": "fair",
           "counts": {
-            "caddisfly": 6,
-            "snail": 6,
-            "true_fly_larva": 3
+            "caddisfly": 3,
+            "snail": 1,
+            "true_fly_larva": 4
           },
           "synthetic": true
         }
@@ -597,30 +592,31 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 4,
-          "classKey": "poor",
+          "score": 5.5,
+          "classKey": "fair",
           "counts": {
-            "snail": 4,
-            "true_fly_larva": 2
+            "riffle_beetle": 5,
+            "snail": 1
           },
           "synthetic": true
         },
         {
           "date": "2026-07-24",
-          "score": 4,
-          "classKey": "poor",
+          "score": 5.5,
+          "classKey": "fair",
           "counts": {
-            "snail": 4,
+            "riffle_beetle": 5,
             "true_fly_larva": 2
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 4,
-          "classKey": "poor",
+          "score": 5,
+          "classKey": "fair",
           "counts": {
-            "snail": 4,
+            "riffle_beetle": 5,
+            "snail": 1,
             "true_fly_larva": 2
           },
           "synthetic": true
@@ -630,8 +626,8 @@
           "score": 5,
           "classKey": "fair",
           "counts": {
-            "riffle_beetle": 6,
-            "snail": 4,
+            "riffle_beetle": 5,
+            "snail": 1,
             "true_fly_larva": 2
           },
           "synthetic": true
@@ -651,8 +647,8 @@
           "score": 5,
           "classKey": "fair",
           "counts": {
-            "riffle_beetle": 5,
-            "snail": 6,
+            "riffle_beetle": 4,
+            "snail": 1,
             "true_fly_larva": 4
           },
           "synthetic": true
@@ -662,19 +658,18 @@
           "score": 5,
           "classKey": "fair",
           "counts": {
-            "riffle_beetle": 5,
-            "snail": 6,
+            "riffle_beetle": 4,
+            "snail": 1,
             "true_fly_larva": 4
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 5,
+          "score": 5.5,
           "classKey": "fair",
           "counts": {
-            "riffle_beetle": 5,
-            "snail": 6,
+            "riffle_beetle": 4,
             "true_fly_larva": 4
           },
           "synthetic": true
@@ -684,8 +679,8 @@
           "score": 5,
           "classKey": "fair",
           "counts": {
-            "riffle_beetle": 5,
-            "snail": 6,
+            "riffle_beetle": 4,
+            "snail": 1,
             "true_fly_larva": 4
           },
           "synthetic": true
@@ -702,11 +697,12 @@
       "history": [
         {
           "date": "2026-06-24",
-          "score": 4.5,
+          "score": 5,
           "classKey": "fair",
           "counts": {
-            "freshwater_shrimp": 1,
-            "true_fly_larva": 3
+            "dragonfly": 1,
+            "freshwater_shrimp": 2,
+            "true_fly_larva": 2
           },
           "synthetic": true
         },
@@ -715,19 +711,19 @@
           "score": 5,
           "classKey": "fair",
           "counts": {
-            "dragonfly": 6,
-            "freshwater_shrimp": 1,
-            "true_fly_larva": 3
+            "dragonfly": 1,
+            "freshwater_shrimp": 2,
+            "true_fly_larva": 2
           },
           "synthetic": true
         },
         {
           "date": "2026-08-23",
-          "score": 5.5,
+          "score": 5,
           "classKey": "fair",
           "counts": {
-            "dragonfly": 6,
-            "freshwater_shrimp": 1
+            "dragonfly": 1,
+            "true_fly_larva": 2
           },
           "synthetic": true
         },
@@ -736,9 +732,9 @@
           "score": 5,
           "classKey": "fair",
           "counts": {
-            "dragonfly": 6,
-            "freshwater_shrimp": 1,
-            "true_fly_larva": 3
+            "dragonfly": 1,
+            "freshwater_shrimp": 2,
+            "true_fly_larva": 2
           },
           "synthetic": true
         }
@@ -757,8 +753,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 2
           },
           "synthetic": true
         },
@@ -767,8 +763,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 2
           },
           "synthetic": true
         },
@@ -777,8 +773,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 2
           },
           "synthetic": true
         },
@@ -787,8 +783,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 2
           },
           "synthetic": true
         }
@@ -807,8 +803,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -817,8 +813,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -827,8 +823,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -837,8 +833,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 6
+            "stonefly": 1,
+            "riffle_beetle": 5
           },
           "synthetic": true
         }
@@ -858,7 +854,7 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 1,
-            "riffle_beetle": 3
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -868,7 +864,7 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 1,
-            "riffle_beetle": 3
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -878,7 +874,7 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 1,
-            "riffle_beetle": 3
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -888,7 +884,7 @@
           "classKey": "natural",
           "counts": {
             "stonefly": 1,
-            "riffle_beetle": 3
+            "riffle_beetle": 5
           },
           "synthetic": true
         }
@@ -907,8 +903,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         },
@@ -917,8 +913,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         },
@@ -927,8 +923,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         },
@@ -937,8 +933,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         }
@@ -957,7 +953,7 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
+            "stonefly": 3,
             "riffle_beetle": 2
           },
           "synthetic": true
@@ -967,7 +963,7 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
+            "stonefly": 3,
             "riffle_beetle": 2
           },
           "synthetic": true
@@ -977,7 +973,7 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
+            "stonefly": 3,
             "riffle_beetle": 2
           },
           "synthetic": true
@@ -987,7 +983,7 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
+            "stonefly": 3,
             "riffle_beetle": 2
           },
           "synthetic": true
@@ -1007,8 +1003,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 5,
-            "true_fly_larva": 4
+            "stonefly": 4,
+            "true_fly_larva": 3
           },
           "synthetic": true
         },
@@ -1017,8 +1013,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 5,
-            "true_fly_larva": 4
+            "stonefly": 4,
+            "true_fly_larva": 3
           },
           "synthetic": true
         },
@@ -1027,8 +1023,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 5,
-            "true_fly_larva": 4
+            "stonefly": 4,
+            "true_fly_larva": 3
           },
           "synthetic": true
         },
@@ -1037,8 +1033,8 @@
           "score": 7,
           "classKey": "good",
           "counts": {
-            "stonefly": 5,
-            "true_fly_larva": 4
+            "stonefly": 4,
+            "true_fly_larva": 3
           },
           "synthetic": true
         }
@@ -1057,8 +1053,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 4,
-            "riffle_beetle": 2
+            "stonefly": 2,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -1067,8 +1063,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 4,
-            "riffle_beetle": 2
+            "stonefly": 2,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -1077,8 +1073,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 4,
-            "riffle_beetle": 2
+            "stonefly": 2,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -1087,8 +1083,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 4,
-            "riffle_beetle": 2
+            "stonefly": 2,
+            "riffle_beetle": 5
           },
           "synthetic": true
         }
@@ -1107,8 +1103,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 6,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -1117,8 +1113,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 6,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -1127,8 +1123,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 6,
+            "riffle_beetle": 5
           },
           "synthetic": true
         },
@@ -1137,8 +1133,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 2,
-            "riffle_beetle": 6
+            "stonefly": 6,
+            "riffle_beetle": 5
           },
           "synthetic": true
         }
@@ -1207,8 +1203,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         },
@@ -1217,8 +1213,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         },
@@ -1227,8 +1223,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         },
@@ -1237,8 +1233,8 @@
           "score": 8.5,
           "classKey": "natural",
           "counts": {
-            "stonefly": 5,
-            "riffle_beetle": 4
+            "stonefly": 3,
+            "riffle_beetle": 6
           },
           "synthetic": true
         }
