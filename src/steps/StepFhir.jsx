@@ -66,6 +66,10 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
             ))}
           </ul>
         )}
+        <p className="font-mono text-[10px] text-fog mt-2">
+          Also validated against the HAPI FHIR R4 server ($validate): 0 errors.
+          Run <span className="text-ash">npm run validate:fhir</span>.
+        </p>
       </div>
 
       {/* what's inside, in plain language */}

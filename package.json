@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "node scripts/build-seed.mjs"
+    "seed": "node scripts/build-seed.mjs",
+    "validate:fhir": "node scripts/validate-fhir.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

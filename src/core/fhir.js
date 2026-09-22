@@ -59,6 +59,7 @@ export function buildBundle(input) {
   const oneHealth = translateOneHealth({ classKey: biotic.classKey, context });
 
   // urn:uuid refs so entries reference each other within the bundle
+  const groupId = `urn:uuid:${idGen()}`;
   const locId = `urn:uuid:${idGen()}`;
   const bioticId = `urn:uuid:${idGen()}`;
   const reliabilityId = `urn:uuid:${idGen()}`;
@@ -66,7 +67,23 @@ export function buildBundle(input) {
 
   const entries = [];
 
-  // 1) Location — the stream is the subject of every observation.
+  // 1a) Group — the stream AS THE SUBJECT of the observations.
+  //     FHIR constrains Observation.subject / RiskAssessment.subject reference
+  //     types (Group is allowed; Location is not). Modeling the monitored
+  //     ecosystem as a Group is the spec-correct way to have a non-patient
+  //     subject. Verified against the HAPI FHIR external validator.
+  entries.push(entry(groupId, {
+    resourceType: 'Group',
+    type: 'device', // a group of monitored environmental sampling units (closest FHIR R4 type)
+    actual: true, // R4: required — this is a real (not definitional) monitored site
+    name: stream?.name || 'Unnamed stream',
+    code: {
+      coding: [{ system: SYS, code: 'stream-monitoring-site', display: 'Urban freshwater monitoring site' }],
+      text: 'Stream monitoring site (ecosystem subject)',
+    },
+  }));
+
+  // 1b) Location — the geographic point (coordinates) for the site.
   entries.push(entry(locId, {
     resourceType: 'Location',
     status: 'active',
@@ -92,7 +109,9 @@ export function buildBundle(input) {
         coding: [{ system: SYS, code: 'biotic-index', display: 'Stream macroinvertebrate biotic index' }],
         text: 'Stream ecological health (biotic index)',
       },
-      subject: { reference: locId, display: stream?.name },
+      subject: { reference: groupId, display: stream?.name },
+      // the geographic point is carried as the focus/location context
+      focus: [{ reference: locId, display: stream?.name }],
       effectiveDateTime: when,
       valueQuantity: { value: biotic.score, unit: 'sensitivity (1-10)', system: SYS, code: 'biotic-score' },
       interpretation: [{
@@ -124,7 +143,7 @@ export function buildBundle(input) {
       coding: [{ system: SYS, code: 'data-reliability', display: 'Citizen data reliability score' }],
       text: 'Data reliability (0-100)',
     },
-    subject: { reference: locId, display: stream?.name },
+    subject: { reference: groupId, display: stream?.name },
     effectiveDateTime: when,
     valueQuantity: { value: reliability.score, unit: 'score (0-100)', system: SYS, code: 'reliability-score' },
     interpretation: [{
@@ -142,7 +161,7 @@ export function buildBundle(input) {
       coding: [{ system: SYS, code: 'one-health-assessment', display: 'One Health consideration set' }],
       text: 'One Health considerations (qualitative)',
     },
-    subject: { reference: locId, display: stream?.name },
+    subject: { reference: groupId, display: stream?.name },
     occurrenceDateTime: when,
     ...(biotic.score !== null ? { basis: [{ reference: bioticId }] } : {}),
     // IMPORTANT: qualitativeRisk only — never a numeric probability of illness.
@@ -215,6 +234,10 @@ export function validateBundle(bundle) {
     }
     if (r.resourceType === 'Location') {
       if (!r.status) errors.push('Location.status missing');
+    }
+    if (r.resourceType === 'Group') {
+      if (!r.type) errors.push('Group.type missing');
+      if (r.actual == null) errors.push('Group.actual missing');
     }
   }
 

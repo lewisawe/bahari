@@ -31,21 +31,24 @@ describe('buildBundle', () => {
     expect(b.entry.length).toBeGreaterThanOrEqual(4);
   });
 
-  it('models the stream as a Location subject (not a Patient)', () => {
+  it('models the stream subject as a Group (a valid non-patient subject, not a Patient)', () => {
     const b = buildBundle(baseInput());
     const types = b.entry.map((e) => e.resource.resourceType);
-    expect(types).toContain('Location');
+    expect(types).toContain('Group'); // the subject
+    expect(types).toContain('Location'); // the geographic point
     expect(types).not.toContain('Patient');
   });
 
-  it('biotic Observation references the Location as its subject', () => {
+  it('biotic Observation references the Group as its subject and the Location as focus', () => {
     const b = buildBundle(baseInput());
+    const group = b.entry.find((e) => e.resource.resourceType === 'Group');
     const loc = b.entry.find((e) => e.resource.resourceType === 'Location');
     const obs = b.entry.find(
       (e) => e.resource.resourceType === 'Observation' &&
         e.resource.code.coding.some((c) => c.code === 'biotic-index'),
     );
-    expect(obs.resource.subject.reference).toBe(loc.fullUrl);
+    expect(obs.resource.subject.reference).toBe(group.fullUrl);
+    expect(obs.resource.focus[0].reference).toBe(loc.fullUrl);
   });
 
   it('records each taxon found as an Observation component with a count', () => {
@@ -118,8 +121,9 @@ describe('validateBundle', () => {
 
   it('flags an unresolved reference', () => {
     const b = buildBundle(baseInput());
-    // break a reference
-    b.entry[1].resource.subject.reference = 'urn:uuid:does-not-exist';
+    // break a real reference on whichever entry has a subject
+    const withSubject = b.entry.find((e) => e.resource.subject);
+    withSubject.resource.subject.reference = 'urn:uuid:does-not-exist';
     const v = validateBundle(b);
     expect(v.valid).toBe(false);
     expect(v.errors.some((e) => /Unresolved reference/.test(e))).toBe(true);
