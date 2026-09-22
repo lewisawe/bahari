@@ -10,12 +10,15 @@ import StepAssess from './steps/StepAssess.jsx';
 import StepResult from './steps/StepResult.jsx';
 import StepOneHealth from './steps/StepOneHealth.jsx';
 import StepFhir from './steps/StepFhir.jsx';
+import Dashboard from './Dashboard.jsx';
 
 // Bahari — guided assessment flow.
 // Step machine: stream -> assess -> result -> onehealth -> fhir.
+// Plus a researcher "overview" dashboard view.
 
 export default function App() {
   const streams = seed.streams || [];
+  const [view, setView] = useState('assess'); // 'assess' | 'overview'
   const [stepIndex, setStepIndex] = useState(0);
   const [assessment, setAssessment] = useState(() => newAssessment(streams[0]?.id ?? null));
   const [landUse, setLandUse] = useState('mixed');
@@ -89,6 +92,15 @@ export default function App() {
     go(0);
   }
 
+  // From the dashboard: jump into the citizen flow at a chosen stream.
+  function openStreamFromDashboard(streamId) {
+    setAssessment(newAssessment(streamId));
+    setRain(null);
+    setSaved(false);
+    setStepIndex(0);
+    setView('assess');
+  }
+
   return (
     <div className="min-h-screen font-sans text-snow flex flex-col">
       <header className="bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
@@ -102,61 +114,84 @@ export default function App() {
               <p className="eyebrow mt-1">Citizen stream health</p>
             </div>
           </div>
-          <Stepper2 steps={STEPS} activeIndex={stepIndex} />
+          {view === 'assess' ? (
+            <Stepper2 steps={STEPS} activeIndex={stepIndex} />
+          ) : (
+            <span className="eyebrow">Researcher view</span>
+          )}
+        </div>
+        {/* view switch */}
+        <div className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
+          <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>
+            Assess a stream
+          </ViewTab>
+          <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>
+            Catchment overview
+          </ViewTab>
         </div>
       </header>
 
       <main className="flex-1 w-full max-w-xl mx-auto p-5">
-        {step.key === 'stream' && (
-          <StepStream
-            streamId={assessment.streamId}
-            onPick={(id) => update({ streamId: id })}
-            landUse={landUse}
-            onLandUse={setLandUse}
+        {view === 'overview' ? (
+          <Dashboard
+            streams={streams}
             historyByStream={historyByStream}
-            onNext={() => go(1)}
+            onOpenStream={openStreamFromDashboard}
           />
-        )}
+        ) : (
+          <>
+            {step.key === 'stream' && (
+              <StepStream
+                streamId={assessment.streamId}
+                onPick={(id) => update({ streamId: id })}
+                landUse={landUse}
+                onLandUse={setLandUse}
+                historyByStream={historyByStream}
+                onNext={() => go(1)}
+              />
+            )}
 
-        {step.key === 'assess' && (
-          <StepAssess
-            counts={assessment.counts}
-            onChange={(counts) => update({ counts })}
-            onPhotoConfirmed={() => update({ photoConfirmed: true, aiAssisted: true })}
-            onBack={() => go(0)}
-            onNext={() => go(2)}
-          />
-        )}
+            {step.key === 'assess' && (
+              <StepAssess
+                counts={assessment.counts}
+                onChange={(counts) => update({ counts })}
+                onPhotoConfirmed={() => update({ photoConfirmed: true, aiAssisted: true })}
+                onBack={() => go(0)}
+                onNext={() => go(2)}
+              />
+            )}
 
-        {step.key === 'result' && (
-          <StepResult
-            counts={assessment.counts}
-            streamName={stream?.name}
-            submission={buildSubmission()}
-            onBack={() => go(1)}
-            onNext={goOneHealth}
-            onRestart={restart}
-          />
-        )}
+            {step.key === 'result' && (
+              <StepResult
+                counts={assessment.counts}
+                streamName={stream?.name}
+                submission={buildSubmission()}
+                onBack={() => go(1)}
+                onNext={goOneHealth}
+                onRestart={restart}
+              />
+            )}
 
-        {step.key === 'onehealth' && (
-          <StepOneHealth
-            counts={assessment.counts}
-            context={context}
-            onBack={() => go(2)}
-            onNext={() => go(4)}
-          />
-        )}
+            {step.key === 'onehealth' && (
+              <StepOneHealth
+                counts={assessment.counts}
+                context={context}
+                onBack={() => go(2)}
+                onNext={() => go(4)}
+              />
+            )}
 
-        {step.key === 'fhir' && (
-          <StepFhir
-            stream={stream}
-            counts={assessment.counts}
-            submission={buildSubmission()}
-            context={context}
-            onBack={() => go(3)}
-            onRestart={restart}
-          />
+            {step.key === 'fhir' && (
+              <StepFhir
+                stream={stream}
+                counts={assessment.counts}
+                submission={buildSubmission()}
+                context={context}
+                onBack={() => go(3)}
+                onRestart={restart}
+              />
+            )}
+          </>
         )}
       </main>
 
@@ -166,5 +201,20 @@ export default function App() {
         </span>
       </footer>
     </div>
+  );
+}
+
+function ViewTab({ active, onClick, children }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        'flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors ' +
+        (active ? 'bg-card text-snow' : 'text-ash hover:text-snow')
+      }
+    >
+      {children}
+    </button>
   );
 }

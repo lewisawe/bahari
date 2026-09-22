@@ -79,4 +79,12 @@ describe('Bahari guided flow', () => {
     fireEvent.click(screen.getByText('Ask the AI'));
     expect(screen.getByText(/Engine: stub/i)).toBeTruthy();
   });
+
+  it('switches to the researcher dashboard and shows aggregate stats', () => {
+    render(<App />);
+    // the view tab (button) — distinct from the dashboard's h2 of the same text
+    fireEvent.click(screen.getByRole('button', { name: 'Catchment overview' }));
+    expect(screen.getByText('Health distribution')).toBeTruthy();
+    expect(screen.getByText(/most stressed first/i)).toBeTruthy();
+  });
 });
