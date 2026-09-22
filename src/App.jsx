@@ -122,7 +122,7 @@ function AppInner() {
       >
         {t('common.skip')}
       </a>
-      <header className="bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
+      <header className="grid-motif bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <span
