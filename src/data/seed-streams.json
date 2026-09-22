@@ -1,0 +1,1245 @@
+{
+  "generatedAt": "2026-09-22T19:18:17.212Z",
+  "source": "GBIF occurrence API — https://api.gbif.org/v1/occurrence/search",
+  "note": "Coordinates, localities and which indicator groups occur at each point are REAL (from GBIF). Individual counts and historical assessment dates/scores are SYNTHETIC, generated from the real taxa presence, and flagged synthetic:true. No invented data is presented as real.",
+  "streamCount": 24,
+  "streams": [
+    {
+      "id": "seed-1",
+      "name": "Bretagne",
+      "country": "France",
+      "lat": 48.4816,
+      "lon": -2.689467,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.3,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 3,
+            "caddisfly": 1,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 6.3,
+          "classKey": "good",
+          "counts": {
+            "caddisfly": 1,
+            "riffle_beetle": 5,
+            "true_fly_larva": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7.3,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 3,
+            "caddisfly": 1,
+            "riffle_beetle": 5,
+            "true_fly_larva": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7.3,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 3,
+            "caddisfly": 1,
+            "riffle_beetle": 5,
+            "true_fly_larva": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-2",
+      "name": "TK25 Blatt 3710/2 - Rheine (Ems)",
+      "country": "Germany",
+      "lat": 52.27359,
+      "lon": 7.457511,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7.7,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 3,
+            "dragonfly": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7.7,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 3,
+            "dragonfly": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-3",
+      "name": "Provence-Alpes-Côte d'Azur",
+      "country": "France",
+      "lat": 43.567205,
+      "lon": 4.890793,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 1,
+            "snail": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 1,
+            "snail": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 1,
+            "snail": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 1,
+            "snail": 1
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-4",
+      "name": "Lombardia",
+      "country": "Italy",
+      "lat": 45.872162,
+      "lon": 8.830387,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 2,
+            "snail": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 2,
+            "snail": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 2,
+            "snail": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-5",
+      "name": "Lazio",
+      "country": "Italy",
+      "lat": 41.69123,
+      "lon": 12.853797,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 7.3,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 1,
+            "freshwater_shrimp": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7.3,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 1,
+            "freshwater_shrimp": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7.3,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 1,
+            "freshwater_shrimp": 6
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-6",
+      "name": "Andalucía",
+      "country": "Spain",
+      "lat": 37.018244,
+      "lon": -4.553742,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 5,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-7",
+      "name": "Andalucía",
+      "country": "Spain",
+      "lat": 36.692715,
+      "lon": -2.71031,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 6,
+            "snail": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 6,
+            "riffle_beetle": 3,
+            "snail": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 6,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 6,
+            "riffle_beetle": 3,
+            "snail": 6
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-8",
+      "name": "Islas Canarias",
+      "country": "Spain",
+      "lat": 28.043647,
+      "lon": -16.705387,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 2,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-9",
+      "name": "Andalucía",
+      "country": "Spain",
+      "lat": 36.822932,
+      "lon": -2.72183,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3,
+            "snail": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 1,
+            "snail": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3,
+            "snail": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-10",
+      "name": "Andalucía",
+      "country": "Spain",
+      "lat": 37.01407,
+      "lon": -4.555163,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 6.5,
+          "classKey": "good",
+          "counts": {
+            "mayfly": 2,
+            "snail": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "mayfly": 2,
+            "caddisfly": 5,
+            "snail": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "mayfly": 2,
+            "caddisfly": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "mayfly": 2,
+            "caddisfly": 5,
+            "snail": 2
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-11",
+      "name": "Coimbra",
+      "country": "Portugal",
+      "lat": 40.302451,
+      "lon": -8.23065,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 5.3,
+          "classKey": "fair",
+          "counts": {
+            "caddisfly": 4,
+            "snail": 3,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 6,
+          "classKey": "good",
+          "counts": {
+            "caddisfly": 4,
+            "snail": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 6,
+          "classKey": "good",
+          "counts": {
+            "caddisfly": 4,
+            "snail": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 5.3,
+          "classKey": "fair",
+          "counts": {
+            "caddisfly": 4,
+            "snail": 3,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-12",
+      "name": "Melgershäuser Feldflur, mit angrenzendem Wald",
+      "country": "Germany",
+      "lat": 51.141582,
+      "lon": 9.497344,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 5.5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 5,
+            "snail": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 5,
+            "snail": 1,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 5,
+            "snail": 1,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 5,
+            "snail": 1,
+            "true_fly_larva": 1
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-13",
+      "name": "Sicily",
+      "country": "Italy",
+      "lat": 37.508433,
+      "lon": 14.963305,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 3,
+            "snail": 5,
+            "true_fly_larva": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 3,
+            "snail": 5,
+            "true_fly_larva": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 4,
+          "classKey": "poor",
+          "counts": {
+            "snail": 5,
+            "true_fly_larva": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "riffle_beetle": 3,
+            "snail": 5,
+            "true_fly_larva": 3
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-14",
+      "name": "Porto",
+      "country": "Portugal",
+      "lat": 41.028116,
+      "lon": -8.622873,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "dragonfly": 6,
+            "freshwater_shrimp": 2,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 5.5,
+          "classKey": "fair",
+          "counts": {
+            "dragonfly": 6,
+            "freshwater_shrimp": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 4.5,
+          "classKey": "fair",
+          "counts": {
+            "freshwater_shrimp": 2,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 5,
+          "classKey": "fair",
+          "counts": {
+            "dragonfly": 6,
+            "freshwater_shrimp": 2,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-15",
+      "name": "Rodgau | Entensee | Leimensee-, Dunkel-, Hallmittschneise",
+      "country": "Germany",
+      "lat": 49.988293,
+      "lon": 8.90783,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 1,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-16",
+      "name": "Wolfen",
+      "country": "Germany",
+      "lat": 51.659351,
+      "lon": 12.266235,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 3,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-17",
+      "name": "TK25 Blatt 3630/3 - Lehre",
+      "country": "Germany",
+      "lat": 52.346237,
+      "lon": 10.705135,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 5,
+            "riffle_beetle": 3
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-18",
+      "name": "Schifferberg | Hochstetten (Nahe)",
+      "country": "Germany",
+      "lat": 49.803436,
+      "lon": 7.507606,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-19",
+      "name": "TK25 Blatt 3346/3 - Berlin / Lübars / Blankenfelde",
+      "country": "Germany",
+      "lat": 52.599541,
+      "lon": 13.389171,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 5
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-20",
+      "name": "Lauer Holz - Hundewald, Lübeck",
+      "country": "Germany",
+      "lat": 53.893925,
+      "lon": 10.734638,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 7,
+          "classKey": "good",
+          "counts": {
+            "stonefly": 5,
+            "true_fly_larva": 4
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-21",
+      "name": "Naturnaher Garten Geiss-Nidda",
+      "country": "Germany",
+      "lat": 50.406498,
+      "lon": 8.966614,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-22",
+      "name": "Silbermöwenweg, Köln-Vogelsang",
+      "country": "Germany",
+      "lat": 50.966171,
+      "lon": 6.879222,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 2,
+            "riffle_beetle": 2
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-23",
+      "name": "Tilly See",
+      "country": "Germany",
+      "lat": 53.079529,
+      "lon": 8.202847,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 9,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 6,
+            "caddisfly": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 9,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 6,
+            "caddisfly": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 9,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 6,
+            "caddisfly": 6
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 9,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 6,
+            "caddisfly": 6
+          },
+          "synthetic": true
+        }
+      ]
+    },
+    {
+      "id": "seed-24",
+      "name": "Centre",
+      "country": "France",
+      "lat": 48.509315,
+      "lon": 1.701824,
+      "dataProvenance": "GBIF occurrence records (real coordinates + real taxa observed)",
+      "history": [
+        {
+          "date": "2026-06-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-07-24",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-08-23",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 1
+          },
+          "synthetic": true
+        },
+        {
+          "date": "2026-09-22",
+          "score": 8.5,
+          "classKey": "natural",
+          "counts": {
+            "stonefly": 4,
+            "riffle_beetle": 1
+          },
+          "synthetic": true
+        }
+      ]
+    }
+  ]
+}

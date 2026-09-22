@@ -1,0 +1,10 @@
+# Netlify deploy config for Bahari (static SPA).
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Single-page app: serve index.html for any route.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

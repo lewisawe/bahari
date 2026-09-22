@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+
+# logs / os
+*.log
+.DS_Store
+
+# env / secrets
+.env
+.env.local
+
+# internal planning & design docs (not part of the public submission)
+PLAN.md
+idea-scorecard.md
+
+# written docs / articles (kept out of the public repo)
+README.md
+submission/
+
+# scripts (data-seed tooling, not shipped)
+scripts/
+
+# CI workflow (add manually with a workflow-scoped token)
+.github/
