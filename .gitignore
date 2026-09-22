@@ -20,8 +20,5 @@ idea-scorecard.md
 README.md
 submission/
 
-# scripts (data-seed tooling, not shipped)
-scripts/
-
 # CI workflow (add manually with a workflow-scoped token)
 .github/
