@@ -37,12 +37,18 @@ export default function StreamMap({
         attributionControl: true,
         scrollWheelZoom: false,
       });
-      // CARTO dark tiles fit the Dovetail theme; OSM standard as the source.
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      // OpenStreetMap standard tiles: genuinely free, no key, no watermark.
+      // We darken them with a CSS filter (added on the tile pane below) so the
+      // map matches the dark Dovetail theme without a paid/keyed dark basemap.
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19,
       }).addTo(map);
+      // darken only the tile layer, not the markers/controls
+      const tilePane = map.getPane('tilePane');
+      if (tilePane) {
+        tilePane.style.filter = 'invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9)';
+      }
       mapRef.current = map;
       renderMarkers();
       if (fitAll && streams.length > 1) {
