@@ -58,19 +58,29 @@ async function main() {
 
   await send(ws, 'Page.navigate', { url: BASE });
   await sleep(2500);
-  await evalJs(ws, `(() => { const b=[...document.querySelectorAll('button')].find(b=>/assess a stream/i.test(b.textContent)); b&&b.click(); return !!b; })()`);
-  await sleep(2000); // map mount + fitAll framing of all 24 streams
+  const entered = await evalJs(ws, `(() => { const b=[...document.querySelectorAll('button')].find(b=>/explore the map|explorer la carte/i.test(b.textContent)); b&&b.click(); return !!b; })()`);
+  if (!entered) throw new Error('Explore-map action was unavailable');
+  await sleep(2500); // dashboard map mount + fitAll framing of all streams
+  for (let attempt = 0; !await evalJs(ws, `document.querySelector('.priority-select') !== null`) && attempt < 20; attempt += 1) {
+    await sleep(200);
+  }
 
-  const before = await evalJs(ws, ZOOM_EXPR);
+  let before = await evalJs(ws, ZOOM_EXPR);
+  for (let attempt = 0; before.tileCount === 0 && attempt < 20; attempt += 1) {
+    await sleep(200);
+    before = await evalJs(ws, ZOOM_EXPR);
+  }
 
-  // Pick a specific far stream and record its intended coords from the list row
+  // Select a priority row. Dashboard keeps the map mounted and passes the
+  // shared selected stream id to the Leaflet fly-to effect.
   const pick = await evalJs(ws, `(() => {
-    const rows = [...document.querySelectorAll('button[aria-pressed]')].filter(b => /\\d+\\.\\d+,\\s*-?\\d+\\.\\d+/.test(b.textContent));
-    const target = rows.find(b => b.getAttribute('aria-pressed') === 'false') || rows[rows.length-1];
-    const label = target.querySelector('.font-medium')?.textContent || null;
+    const target = document.querySelector('.priority-select');
+    if (!target) return null;
+    const label = target.querySelector('span')?.textContent || target.textContent.trim();
     target.click();
     return { label };
   })()`);
+  if (!pick) throw new Error('No Trust Console priority row was available');
 
   await sleep(1800); // flyTo (0.8s) + tile load
   const after = await evalJs(ws, ZOOM_EXPR);
