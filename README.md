@@ -20,8 +20,8 @@ valid FHIR record that real health and research systems can ingest.
    plus a separate **data-reliability score** researchers can filter on.
 4. **Understand it** as qualitative, caveated **One Health** considerations for
    people and animals. It never claims the water causes a disease.
-5. **Share it** as a valid **FHIR R4** record, with the stream modeled as the
-   record's subject.
+5. **Share it** as a valid, IG-aligned **FHIR R4** record, with the stream (a
+   `LocationOah`) modeled as the record's subject.
 
 Plus a **researcher dashboard**: every stream on a map, with aggregate health
 distribution, trends, and a most-stressed-first table.
@@ -33,7 +33,7 @@ the assessment flow.
 
 ```bash
 npm install
-npm test              # 120 tests: science, AI policy, reliability, One Health, FHIR, a11y, i18n, aggregate
+npm test              # full vitest suite (132 passing): science, AI policy, reliability, One Health, FHIR, a11y, i18n, aggregate
 npm run dev           # start the dev server (http://localhost:5173)
 npm run build         # production build to dist/
 npm run seed          # (optional) rebuild the real-data seed from the GBIF API
@@ -51,16 +51,39 @@ output `dist`.
 Bahari uses the average-sensitivity biotic-index method (miniSASS / ASPT / SIGNAL
 family): each indicator group of streambed invertebrates has a
 pollution-sensitivity weight; the mean sensitivity of the groups found gives an
-ecological score, mapped to plain-language classes. Weights and sources are in
-`src/core/taxa.js`, and the calculation is shown transparently in the app.
+ecological score, mapped to plain-language classes. The per-group weights follow
+the published **miniSASS** sensitivity ordering (1–10, higher = more sensitive),
+cited and annotated per group in `src/core/taxa.js`; where an exact published
+integer is not available for a group (a couple of ties and mid-scale groups), the
+value is a transparent surrogate positioned by that published ordering and
+labelled as such in source — not a fabricated source. The calculation is shown
+transparently in the app.
 
 ## Responsible AI
 
 The AI identification assist never records anything on its own. It shows its
 visual reasoning and a confidence level, and when confidence is low it defers to
-the human. The engine is swappable (`setAssistProvider`): the app ships with a
-zero-dependency stub so the demo never depends on a live model, and a real vision
-model can be dropped in without any UI change.
+the human (defer < 0.5, review < 0.75, suggested above — the AI never records).
+The engine is swappable (`setAssistProvider`): the app ships with a
+zero-dependency stub so the demo never depends on a live model.
+
+A real **Gemini vision adapter** (`geminiProvider` in `src/core/ai-assist.js`)
+is included behind that same interface. It reads its key from the
+`VITE_GEMINI_API_KEY` environment variable (never hardcoded or committed), sends
+the actual photo to the vision model, and maps the response into our
+`{ taxonId, confidence, cues }` shape — which then flows through the **unchanged**
+confidence-gating policy. If no key is present, or the call fails for any reason,
+the adapter **automatically falls back to the stub** for that call, so the app
+always runs offline/keyless. To supply a key, add it to a local `.env` (which is
+gitignored):
+
+```bash
+# .env  (never commit this)
+VITE_GEMINI_API_KEY=your-key-here
+```
+
+Swapping to the real model needs **no UI change** and does not alter the
+human-in-the-loop safeguards.
 
 ## One Health, honestly
 
@@ -71,12 +94,37 @@ and its limits.
 
 ## FHIR
 
-Each assessment exports as a FHIR R4 Bundle. The stream is modeled as the
-subject via a `Group` (a valid non-patient subject), with the geographic point as
-a linked `Location`. The ecological result and reliability are `Observation`s;
-the One Health considerations are a `RiskAssessment` with qualitative risk only.
-The bundle validates cleanly against the public HAPI FHIR R4 server: run
-`npm run validate:fhir`.
+Each assessment exports as a FHIR R4 Bundle **aligned with the official
+OneAquaHealth HL7 FHIR Implementation Guide** ([github.com/hl7-eu/oah](https://github.com/hl7-eu/oah);
+canonical base `http://hl7.eu/fhir/ig/oah`). Each resource carries the matching
+IG profile in `meta.profile`:
+
+- The stream is the **subject**, modeled as a **`LocationOah`** `Location`
+  (identifier, name, `mode = #instance`, coordinates). Making the ecosystem the
+  subject is the IG-correct way to describe a non-patient subject; the old
+  `Group` was removed because the IG's `GroupOah` models cohorts of **people**,
+  not ecosystems.
+- The ecological reading is an **`ObservationIndicatorsOah`** with the Location
+  as subject and each indicator group as a component.
+- The macroinvertebrate sample is a **`SpecimenOah`**, collected from the
+  Location and linked from the biotic Observation.
+- The citizen observer is a display-only `performer` (as the IG's own examples
+  do), so no personal data is recorded.
+- Data reliability is a second Location-subject Observation (derivedFrom the
+  biotic one).
+- The **One Health** layer is a third, qualitative Location-subject Observation
+  (not a `RiskAssessment`): the IG is Observation-centric and base-R4
+  `RiskAssessment.subject` cannot be a `Location`. Values are qualitative
+  `CodeableConcept`s with reason/basis/limits and a caveat note, never a numeric
+  risk or a diagnosis.
+
+Honest scope: Bahari is **aligned with / conformant to the referenced profiles'
+key constraints, validated structurally on HAPI R4** (0 structural errors) — it
+does not claim full IG conformance on a public server that cannot fetch the draft
+IG. Where no standard code exists, custom codes live under
+`https://lewisawe.github.io/bahari/fhir/CodeSystem/stream-health`. The bundle
+validates with 0 structural errors against the public HAPI FHIR R4 server: run
+`npm run validate:fhir`. See `submission/FHIR_VALIDATION.md`.
 
 ## Accessibility
 

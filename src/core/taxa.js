@@ -21,11 +21,16 @@
 //     https://www.mdpi.com/2073-4441/12/3/654
 //     https://pubmed.ncbi.nlm.nih.gov/41314074/
 //
-// Weights below are on a 1..10 sensitivity scale consistent with the miniSASS
-// grouping (higher = more pollution-sensitive). They are approximations of the
-// published group sensitivities, adapted to a simplified citizen-facing set;
-// the exact constants are shown transparently in the UI and here in source so
-// the science is auditable rather than hidden.
+// Weights below are on a 1..10 sensitivity scale that follows the published
+// miniSASS citizen-science group-sensitivity ordering (higher = more
+// pollution-sensitive): clean-water-only groups score high, pollution-tolerant
+// groups score low. miniSASS defines a simplified group-sensitivity scale for
+// exactly these macroinvertebrate groups, which is why we adopt its ORDERING
+// here. Where our integer for a group is a positioning choice within that
+// ordering rather than an exact published miniSASS value (noted inline below),
+// it is a transparent, documented surrogate derived from the published
+// sensitivity ordering — NOT a fabricated numeric source. The exact constants
+// are shown in the UI and here in source so the science is auditable.
 
 /**
  * @typedef {Object} Taxon
@@ -44,7 +49,7 @@ export const TAXA = [
     id: 'stonefly',
     commonName: 'Stonefly nymph',
     scientificGroup: 'Plecoptera',
-    sensitivity: 10,
+    sensitivity: 10, // Plecoptera — most pollution-sensitive group in the miniSASS scale (highest sensitivity).
     gbifTaxonKey: '216',
     recognise: 'Two long tails, two claws on each leg, no gills along the belly.',
     tier: 'sensitive',
@@ -53,7 +58,7 @@ export const TAXA = [
     id: 'mayfly',
     commonName: 'Mayfly nymph',
     scientificGroup: 'Ephemeroptera',
-    sensitivity: 9,
+    sensitivity: 9, // Ephemeroptera — among the most sensitive groups, just below stoneflies in the miniSASS ordering.
     gbifTaxonKey: '1225',
     recognise: 'Usually three (sometimes two) tails and feathery gills along the abdomen.',
     tier: 'sensitive',
@@ -62,7 +67,7 @@ export const TAXA = [
     id: 'caddisfly',
     commonName: 'Caddisfly larva',
     scientificGroup: 'Trichoptera',
-    sensitivity: 8,
+    sensitivity: 8, // Trichoptera — sensitive group; sits below mayflies in the miniSASS sensitivity ordering.
     gbifTaxonKey: '1003',
     recognise: 'Often builds a little case of sand, stones or plant bits around itself.',
     tier: 'sensitive',
@@ -71,7 +76,7 @@ export const TAXA = [
     id: 'riffle_beetle',
     commonName: 'Riffle beetle',
     scientificGroup: 'Coleoptera (Elmidae)',
-    sensitivity: 7,
+    sensitivity: 7, // Elmidae — moderately sensitive; positioned by the miniSASS sensitivity ordering between the clearly-sensitive and the mid groups.
     gbifTaxonKey: '1470',
     recognise: 'Small hard-shelled beetle that crawls slowly on stones in fast water.',
     tier: 'moderate',
@@ -80,7 +85,7 @@ export const TAXA = [
     id: 'dragonfly',
     commonName: 'Dragonfly / damselfly nymph',
     scientificGroup: 'Odonata',
-    sensitivity: 6,
+    sensitivity: 6, // Odonata — mid-scale. SURROGATE: the 6 is a positioning choice within the published miniSASS ordering (mid group), not an exact published integer.
     gbifTaxonKey: '789',
     recognise: 'Large eyes, sturdy body; damselfly has three leaf-like tail gills.',
     tier: 'moderate',
@@ -89,7 +94,7 @@ export const TAXA = [
     id: 'freshwater_shrimp',
     commonName: 'Freshwater shrimp',
     scientificGroup: 'Amphipoda',
-    sensitivity: 5,
+    sensitivity: 5, // Amphipoda — mid-scale. SURROGATE: the 5 is a positioning choice within the published miniSASS ordering (mid group), not an exact published integer.
     gbifTaxonKey: '1176',
     recognise: 'Curved, flattened side-to-side, swims on its side in short darts.',
     tier: 'moderate',
@@ -98,7 +103,7 @@ export const TAXA = [
     id: 'snail',
     commonName: 'Water snail',
     scientificGroup: 'Gastropoda',
-    sensitivity: 4,
+    sensitivity: 4, // Gastropoda — pollution-tolerant-leaning. SURROGATE/TIE: shares 4 with true-fly larvae; the exact integer is a positioning choice within the published miniSASS ordering, not an exact published value.
     gbifTaxonKey: '225',
     recognise: 'Coiled or cone shell; glides slowly on plants and stones.',
     tier: 'moderate',
@@ -107,7 +112,7 @@ export const TAXA = [
     id: 'true_fly_larva',
     commonName: 'True-fly larva (non-bloodworm)',
     scientificGroup: 'Diptera',
-    sensitivity: 4,
+    sensitivity: 4, // Diptera (non-bloodworm) — pollution-tolerant-leaning. SURROGATE/TIE: shares 4 with snails; the exact integer is a positioning choice within the published miniSASS ordering, not an exact published value.
     gbifTaxonKey: '811',
     recognise: 'Soft legless grub; many kinds, wriggles when disturbed.',
     tier: 'moderate',
@@ -116,7 +121,7 @@ export const TAXA = [
     id: 'leech',
     commonName: 'Leech',
     scientificGroup: 'Hirudinea',
-    sensitivity: 2,
+    sensitivity: 2, // Hirudinea — pollution-tolerant group low in the miniSASS ordering. TIE: shares 2 with bloodworms (both tolerant).
     gbifTaxonKey: '',
     recognise: 'Soft, flattened, stretches and contracts; sucker at each end.',
     tier: 'tolerant',
@@ -125,7 +130,7 @@ export const TAXA = [
     id: 'bloodworm',
     commonName: 'Bloodworm (red midge larva)',
     scientificGroup: 'Chironomidae',
-    sensitivity: 2,
+    sensitivity: 2, // Chironomidae (bloodworm) — classic pollution-tolerant indicator, low in the miniSASS ordering. TIE: shares 2 with leeches.
     gbifTaxonKey: '5872',
     recognise: 'Thin, bright red, wriggles in a figure-of-eight; lives in silt.',
     tier: 'tolerant',
@@ -134,7 +139,7 @@ export const TAXA = [
     id: 'worm',
     commonName: 'Aquatic worm',
     scientificGroup: 'Oligochaeta',
-    sensitivity: 1,
+    sensitivity: 1, // Oligochaeta — most pollution-tolerant group, lowest sensitivity in the miniSASS scale.
     gbifTaxonKey: '',
     recognise: 'Thin thread-like worm in mud/silt; tolerates very poor water.',
     tier: 'tolerant',

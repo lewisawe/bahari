@@ -28,6 +28,10 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
 
   const resourceList = bundle.entry.map((e) => e.resource.resourceType);
   const counts_ = validation.resourceCounts;
+  const hasOneHealth = bundle.entry.some((e) =>
+    e.resource.code?.coding?.some((c) => c.code === 'one-health-assessment'),
+  );
+  const hasSpecimen = resourceList.includes('Specimen');
 
   return (
     <div className="space-y-6">
@@ -77,14 +81,19 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
             desc="The stream itself, the subject of the record (with coordinates)."
           />
           <ResourceLine
-            present={counts_.Observation > 0}
-            title={`Observation ×${counts_.Observation || 0}`}
-            desc="Ecological health score (with each group found) and the data-reliability score."
+            present={hasSpecimen}
+            title="Specimen"
+            desc="The macroinvertebrate sample collected from the stream."
           />
           <ResourceLine
-            present={resourceList.includes('RiskAssessment')}
-            title="RiskAssessment"
-            desc="One Health considerations, qualitative and caveated, never a diagnosis."
+            present={counts_.Observation > 0}
+            title={`Observation ×${counts_.Observation || 0}`}
+            desc="Ecological health score (with each group found), the data-reliability score, and the One Health considerations."
+          />
+          <ResourceLine
+            present={hasOneHealth}
+            title="One Health"
+            desc="Qualitative, caveated considerations modelled as a Location-subject Observation, never a diagnosis."
           />
         </ul>
         <p className="text-[11px] text-fog mt-3">

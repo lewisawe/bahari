@@ -64,6 +64,173 @@ export function getProviderName() {
   return provider.providerName || 'stub';
 }
 
+// ---------------------------------------------------------------------------
+// Real vision-provider adapter (Gemini) behind the same provider interface.
+//
+// `geminiProvider(...)` returns a provider function with the SAME contract as
+// the stub: async (input) => { taxonId, confidence, reasoning:string[],
+// alternatives? } which `applyConfidencePolicy` then gates. It sends the actual
+// image to a Gemini vision model and maps the model's structured answer into
+// our shape. If there is NO API key, or the network call fails for any reason,
+// it AUTOMATICALLY falls back to the built-in stub for that call, so the app
+// always works offline/keyless. applyConfidencePolicy and the thresholds are
+// unchanged — the responsible-AI gate is identical regardless of provider.
+//
+// SECURITY: the key is read from import.meta.env.VITE_GEMINI_API_KEY. It is
+// NEVER hardcoded or committed. Supply it via a local .env (gitignored):
+//   VITE_GEMINI_API_KEY=your-key-here
+// ---------------------------------------------------------------------------
+
+const GEMINI_DEFAULT_ENDPOINT =
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+/**
+ * Read VITE_GEMINI_API_KEY from import.meta.env without throwing in non-Vite
+ * (e.g. plain Node test) environments where import.meta.env may be undefined.
+ */
+function defaultGeminiKey() {
+  try {
+    return import.meta.env?.VITE_GEMINI_API_KEY;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Factory for a real Gemini vision provider.
+ * @param {{apiKey?:string, fetchImpl?:Function, endpoint?:string}} [opts]
+ *   - apiKey   defaults to import.meta.env.VITE_GEMINI_API_KEY
+ *   - fetchImpl defaults to the global fetch (injectable so tests mock the
+ *               network with NO real calls)
+ *   - endpoint  Gemini generateContent endpoint (sensible default)
+ * Expected input field: `input.photoDataUrl` — a data URL ("data:image/...;base64,....")
+ * or raw base64 string of the organism photo. (`input.photoName`/`seed` are also
+ * accepted and forwarded to the stub fallback for deterministic offline behavior.)
+ * @returns {(input:object) => Promise<{taxonId:string|null, confidence:number, reasoning:string[], alternatives:any[]}>}
+ */
+export function geminiProvider(opts = {}) {
+  const {
+    apiKey = defaultGeminiKey(),
+    fetchImpl,
+    endpoint = GEMINI_DEFAULT_ENDPOINT,
+  } = opts;
+
+  const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : undefined);
+
+  async function fn(input = {}) {
+    // No key, or no fetch available -> fall back to the stub (keyless/offline).
+    if (!apiKey || !doFetch) {
+      return stubProvider(input);
+    }
+    try {
+      const { data, mimeType } = parseImagePayload(input);
+      // If there is no image to send, we cannot do a real vision call -> stub.
+      if (!data) return stubProvider(input);
+
+      const body = {
+        contents: [{
+          role: 'user',
+          parts: [
+            { text: VISION_PROMPT },
+            { inlineData: { mimeType, data } },
+          ],
+        }],
+        // Ask for a compact JSON answer we can map deterministically.
+        generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+      };
+
+      const res = await doFetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(body),
+      });
+      if (!res || !res.ok) {
+        throw new Error(`Gemini HTTP ${res ? res.status : 'no-response'}`);
+      }
+      const payload = await res.json();
+      return mapGeminiResponse(payload);
+    } catch {
+      // Any failure (network, parse, mapping) -> graceful stub fallback.
+      return stubProvider(input);
+    }
+  }
+  fn.providerName = 'gemini-vision';
+  return fn;
+}
+
+// Instruction we give the vision model. We ask for our taxon ids directly so
+// mapping is a lookup, with a confidence and short visual cues.
+const VISION_PROMPT =
+  'You identify a single freshwater streambed macroinvertebrate in the image for ' +
+  'a citizen-science biotic-index app. Respond ONLY as JSON of the form ' +
+  '{"taxonId": <one of the allowed ids or null>, "confidence": <number 0..1>, ' +
+  '"cues": [<short visual-cue strings>], ' +
+  '"alternatives": [{"taxonId": <id>, "confidence": <number>}]}. ' +
+  'Allowed taxonId values: ' + TAXA.map((t) => t.id).join(', ') + '. ' +
+  'Use null for taxonId if you cannot tell.';
+
+/**
+ * Accept either a data URL ("data:image/png;base64,AAAA...") or a raw base64
+ * string, and return { data, mimeType } for Gemini inlineData.
+ */
+function parseImagePayload(input) {
+  const raw = input?.photoDataUrl || input?.imageBase64 || input?.image;
+  if (typeof raw !== 'string' || raw.length === 0) return { data: null, mimeType: null };
+  const m = /^data:([^;]+);base64,(.*)$/i.exec(raw);
+  if (m) return { mimeType: m[1], data: m[2] };
+  return { mimeType: 'image/jpeg', data: raw };
+}
+
+/**
+ * Map a Gemini generateContent response into our raw-guess shape:
+ *   { taxonId, confidence, reasoning:string[], alternatives:[{taxonId,confidence}] }
+ * - model label -> nearest TAXA id (exact id match, else null)
+ * - cues[] -> reasoning[]  (preserving the {taxonId, confidence, cues} naming)
+ * Pure + exported so the unit test can exercise mapping with a mocked response.
+ * @param {object} payload Gemini generateContent JSON
+ */
+export function mapGeminiResponse(payload) {
+  const text = extractText(payload);
+  let parsed = {};
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  const taxonId = normalizeTaxonId(parsed.taxonId ?? parsed.taxon ?? parsed.label);
+  const confidence = clamp01(parsed.confidence);
+  const cues = Array.isArray(parsed.cues)
+    ? parsed.cues.filter((c) => typeof c === 'string')
+    : Array.isArray(parsed.reasoning)
+      ? parsed.reasoning.filter((c) => typeof c === 'string')
+      : [];
+  const alternatives = Array.isArray(parsed.alternatives)
+    ? parsed.alternatives
+        .map((a) => ({ taxonId: normalizeTaxonId(a?.taxonId ?? a?.label), confidence: clamp01(a?.confidence) }))
+        .filter((a) => a.taxonId)
+    : [];
+  // `reasoning` is the policy's field name; `cues` is the task's name — keep both
+  // identical so either consumer sees the same strings.
+  return { taxonId, confidence, reasoning: cues, cues, alternatives };
+}
+
+/** Pull the text out of a Gemini generateContent response. */
+function extractText(payload) {
+  const parts = payload?.candidates?.[0]?.content?.parts;
+  if (Array.isArray(parts)) {
+    return parts.map((p) => (typeof p?.text === 'string' ? p.text : '')).join('');
+  }
+  return '';
+}
+
+/** Map an arbitrary model label to one of our known taxon ids, or null. */
+function normalizeTaxonId(label) {
+  if (typeof label !== 'string') return null;
+  const id = label.trim().toLowerCase();
+  return getTaxon(id) ? id : null;
+}
+
+
 /**
  * Ask the assist to identify the organism in `input`.
  * @param {{photoName?:string, hintTaxonId?:string, seed?:number}} input

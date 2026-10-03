@@ -1,10 +1,12 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   identifyTaxon,
   applyConfidencePolicy,
   setAssistProvider,
   resetAssistProvider,
   getProviderName,
+  geminiProvider,
+  mapGeminiResponse,
   CONFIDENT_THRESHOLD,
   REVIEW_THRESHOLD,
 } from './ai-assist.js';
@@ -112,5 +114,96 @@ describe('swappable provider', () => {
 
     resetAssistProvider();
     expect(getProviderName()).toBe('stub');
+  });
+});
+
+describe('real vision provider (gemini adapter)', () => {
+  // A fake Gemini generateContent response carrying our JSON answer as text.
+  function fakeGeminiResponse(answer) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{ content: { parts: [{ text: JSON.stringify(answer) }] } }],
+      }),
+    };
+  }
+
+  it('maps a model response into our {taxonId, confidence, reasoning/cues} shape', async () => {
+    const mock = vi.fn(async () =>
+      fakeGeminiResponse({
+        taxonId: 'mayfly',
+        confidence: 0.82,
+        cues: ['three tails', 'feathery gills along the abdomen'],
+        alternatives: [{ taxonId: 'stonefly', confidence: 0.3 }],
+      }),
+    );
+    const provider = geminiProvider({ apiKey: 'test-key', fetchImpl: mock });
+
+    const raw = await provider({ photoDataUrl: 'data:image/jpeg;base64,QUJD' });
+    expect(mock).toHaveBeenCalledTimes(1);
+
+    // mapped shape
+    expect(TAXON_IDS).toContain(raw.taxonId);
+    expect(raw.taxonId).toBe('mayfly');
+    expect(raw.confidence).toBeGreaterThanOrEqual(0);
+    expect(raw.confidence).toBeLessThanOrEqual(1);
+    expect(Array.isArray(raw.reasoning)).toBe(true);
+    expect(raw.reasoning.length).toBeGreaterThan(0);
+    expect(raw.reasoning).toEqual(raw.cues); // task names it `cues`; policy uses `reasoning`
+
+    // and it flows through the unchanged confidence policy
+    const gated = applyConfidencePolicy(raw, 'gemini-vision');
+    expect(gated.status).toBe('suggested'); // 0.82 >= CONFIDENT_THRESHOLD
+    expect(gated.taxonId).toBe('mayfly');
+  });
+
+  it('maps an unknown label to taxonId null (defer under the policy)', () => {
+    const raw = mapGeminiResponse({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({ taxonId: 'unicorn', confidence: 0.9, cues: ['sparkles'] }) }] } }],
+    });
+    expect(raw.taxonId).toBeNull();
+    const gated = applyConfidencePolicy(raw, 'gemini-vision');
+    expect(gated.status).toBe('defer');
+    expect(gated.taxonId).toBeNull();
+  });
+
+  it('keyless -> falls back to the stub WITHOUT any network call', async () => {
+    const mock = vi.fn();
+    const provider = geminiProvider({ apiKey: undefined, fetchImpl: mock });
+    const r = await provider({ photoName: 'rock1.jpg', seed: 7 });
+    expect(mock).not.toHaveBeenCalled(); // no real network
+    // stub shape: deterministic for the same input
+    const r2 = await provider({ photoName: 'rock1.jpg', seed: 7 });
+    expect(r).toEqual(r2);
+    expect(r).toHaveProperty('taxonId');
+    expect(r).toHaveProperty('confidence');
+    expect(Array.isArray(r.reasoning)).toBe(true);
+  });
+
+  it('network/API error -> falls back to the stub (no throw)', async () => {
+    const mock = vi.fn(async () => Promise.reject(new Error('network')));
+    const provider = geminiProvider({ apiKey: 'x', fetchImpl: mock });
+    const r = await provider({ photoDataUrl: 'data:image/jpeg;base64,QUJD', photoName: 'p.jpg', seed: 2 });
+    expect(mock).toHaveBeenCalledTimes(1);
+    // stub-shaped, deterministic, did not throw
+    expect(r).toHaveProperty('taxonId');
+    expect(r.confidence).toBeGreaterThanOrEqual(0);
+    expect(r.confidence).toBeLessThanOrEqual(1);
+    expect(Array.isArray(r.reasoning)).toBe(true);
+  });
+
+  it('non-ok HTTP response -> falls back to the stub', async () => {
+    const mock = vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) }));
+    const provider = geminiProvider({ apiKey: 'x', fetchImpl: mock });
+    const r = await provider({ photoDataUrl: 'data:image/jpeg;base64,QUJD', photoName: 'p.jpg', seed: 3 });
+    expect(mock).toHaveBeenCalledTimes(1);
+    expect(r).toHaveProperty('taxonId');
+    expect(Array.isArray(r.reasoning)).toBe(true);
+  });
+
+  it('reports a meaningful provider name when swapped in', () => {
+    const provider = geminiProvider({ apiKey: 'test', fetchImpl: vi.fn() });
+    expect(provider.providerName).toBe('gemini-vision');
   });
 });
