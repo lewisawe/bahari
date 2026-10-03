@@ -19,6 +19,13 @@ idea-scorecard.md
 DESIGN.md
 .agents/
 
+# agent scratch & verification artifacts (generated, not product code)
+findings.md
+progress.md
+task_plan.md
+scripts/*-evidence.mjs
+.worktrees/
+
 # written docs / articles (kept out of the public repo)
 submission/
 
