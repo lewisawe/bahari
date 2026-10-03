@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import React from 'react';
 import { I18nProvider } from '../i18n/I18n.jsx';
 import StepResult from '../steps/StepResult.jsx';
@@ -88,21 +88,58 @@ describe('Beat B — valid FHIR hero (StepFhir)', () => {
 });
 
 describe('Beat C — confidence meter (AssistPanel)', () => {
-  it('shows an accessible confidence meter with the band label after running the stub', async () => {
-    const { container } = wrap(<AssistPanel onConfirm={() => {}} onClose={() => {}} />);
-    // thinking -> done
-    fireEvent.click(screen.getByText('Ask the AI'));
-    await waitFor(() => expect(container.querySelector('[role="meter"]')).toBeTruthy());
+  const positiveTaxa = [{ id: 'mayfly', commonName: 'Mayfly nymph' }];
+  const photo = { id: 'photo-1', name: 'creature.jpg' };
+  const aiReview = {
+    human: { taxonId: 'mayfly', source: 'citizen-count', confirmedAt: '2026-01-01T00:00:00.000Z' },
+    model: {
+      photoId: 'photo-1',
+      taxonId: 'mayfly',
+      confidence: 0.82,
+      policyStatus: 'suggested',
+      provider: 'stub',
+      cues: ['Three tails detected'],
+      alternatives: [],
+      analyzedAt: '2026-01-01T00:00:01.000Z',
+    },
+    outcome: 'agreement',
+  };
+
+  it('shows an accessible confidence meter with the band label for a completed review', () => {
+    const { container } = wrap(
+      <AssistPanel
+        positiveTaxa={positiveTaxa}
+        photo={photo}
+        photoReady
+        aiReview={aiReview}
+        onPhotoChange={() => {}}
+        onPhotoRemove={() => {}}
+        onAnalyze={() => {}}
+        onEditHuman={() => {}}
+        onClose={() => {}}
+      />,
+    );
     const meter = container.querySelector('[role="meter"]');
+    expect(meter).toBeTruthy();
     expect(meter.getAttribute('aria-valuenow')).toBeTruthy();
-    // the fill uses the meter-fill animation class
     expect(container.querySelector('.anim-meter')).toBeTruthy();
   });
 
-  it('shows a scanning affordance while thinking', async () => {
-    const { container } = wrap(<AssistPanel onConfirm={() => {}} onClose={() => {}} />);
-    fireEvent.click(screen.getByText('Ask the AI'));
-    // the scanning frame appears synchronously in the thinking phase
+  it('shows a scanning affordance while thinking', () => {
+    const { container } = wrap(
+      <AssistPanel
+        positiveTaxa={positiveTaxa}
+        photo={photo}
+        photoReady
+        aiReview={null}
+        onPhotoChange={() => {}}
+        onPhotoRemove={() => {}}
+        onAnalyze={() => new Promise(() => {})}
+        onEditHuman={() => {}}
+        onClose={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByText('Check photo'));
     expect(container.querySelector('.scan-frame')).toBeTruthy();
   });
 });

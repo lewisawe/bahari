@@ -7,6 +7,7 @@ import App from './App.jsx';
 // deterministic and offline (the app already falls back gracefully).
 beforeEach(() => {
   globalThis.fetch = vi.fn(() => Promise.reject(new Error('offline in test')));
+  globalThis.createImageBitmap = vi.fn(async () => ({ close: vi.fn() }));
   try {
     localStorage.clear();
   } catch {
@@ -16,6 +17,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  delete globalThis.createImageBitmap;
   vi.restoreAllMocks();
 });
 
@@ -84,16 +86,21 @@ describe('Bahari guided flow', () => {
     expect(next.disabled).toBe(true);
   });
 
-  it('opens the AI assist panel and can run it without crashing', () => {
+  it('opens the blind AI panel after a human count and runs the stub without changing it', async () => {
     render(<App />);
     enterApp();
     fireEvent.click(screen.getByText('Start assessment'));
-    fireEvent.click(screen.getByText(/Check a photo with AI/i));
-    // panel visible
-    expect(screen.getByText('AI identification help')).toBeTruthy();
-    // run the assist (stub) — should not crash and should show the engine label
-    fireEvent.click(screen.getByText('Ask the AI'));
-    expect(screen.getByText(/Engine: stub/i)).toBeTruthy();
+    const firstCountButton = screen.getAllByLabelText(/One more/i)[0];
+    fireEvent.click(firstCountButton);
+    fireEvent.click(screen.getByText(/blind AI second opinion/i));
+    expect(screen.getByText('Blind AI second opinion')).toBeTruthy();
+
+    const file = new File(['photo-bytes'], 'creature.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByLabelText(/JPEG or PNG photo/i), { target: { files: [file] } });
+    expect(await screen.findByText('Selected: creature.jpg')).toBeTruthy();
+    fireEvent.click(screen.getByText('Check photo'));
+    expect(await screen.findByText(/Provider: stub/i)).toBeTruthy();
+    expect(firstCountButton.parentElement.textContent).toContain('1');
   });
 
   it('switches to the researcher dashboard and shows aggregate stats', () => {

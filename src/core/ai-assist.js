@@ -1,61 +1,23 @@
-// Bahari — explainable, human-in-the-loop AI identification assist.
-//
-// DESIGN PRINCIPLE (Track 3: "use AI responsibly ... without replacing human
-// judgment"): the assist is a *suggestion engine*, never the decision-maker.
-// It always returns visible reasoning and a calibrated confidence, and when it
-// is not confident enough it explicitly REFUSES to suggest an ID and hands the
-// decision to the human. The citizen confirms or overrides every result — the
-// AI never writes a count on its own.
-//
-// The assist is swappable: `identifyTaxon` delegates to a provider. The default
-// provider is a self-contained STUB (no API key, works offline, deterministic
-// for a given input) so the demo never depends on a live model. A real
-// vision-LLM provider can be dropped in via `setAssistProvider` without
-// changing any UI code.
-//
-// Confidence policy:
-//   >= CONFIDENT_THRESHOLD  -> show as a confident suggestion (still confirmable)
-//   >= REVIEW_THRESHOLD      -> show as a tentative suggestion, nudge human to verify
-//   <  REVIEW_THRESHOLD      -> REFUSE: no auto-suggestion, ask the human to decide
-//
-// Return shape (stable contract for UI + future real provider):
-//   {
-//     status: 'suggested' | 'review' | 'defer',
-//     taxonId: string | null,        // best-guess group id, or null when defer
-//     confidence: number,            // 0..1
-//     reasoning: string[],           // human-readable visual cues
-//     alternatives: {taxonId, confidence}[],  // runner-up guesses
-//     provider: string,              // which engine produced this
-//   }
+// Bahari — explainable, human-in-the-loop identification assist.
+// Human counts remain authoritative. Providers return advisory evidence only.
 
 import { TAXA, getTaxon } from './taxa.js';
 
 export const CONFIDENT_THRESHOLD = 0.75;
 export const REVIEW_THRESHOLD = 0.5;
 
-/**
- * @typedef {Object} AssistResult
- * @property {'suggested'|'review'|'defer'} status
- * @property {string|null} taxonId
- * @property {number} confidence
- * @property {string[]} reasoning
- * @property {{taxonId:string, confidence:number}[]} alternatives
- * @property {string} provider
- */
+const NOVA_DEFAULT_ENDPOINT = '/api/identify';
+const NOVA_TIMEOUT_MS = 15_000;
+const MAX_CUES = 8;
+const MAX_CUE_LENGTH = 200;
+const MAX_ALTERNATIVES = 5;
 
-/**
- * Provider interface: async (input) => rawGuess
- * rawGuess = { taxonId, confidence, reasoning:string[], alternatives?:[{taxonId,confidence}] }
- * The stub below is the default. A real vision-LLM provider implements the same
- * shape (send the photo, parse the model's structured answer).
- */
 let provider = stubProvider;
 
 export function setAssistProvider(fn) {
   provider = fn;
 }
 
-/** Restore the built-in stub provider (used after swapping to a real one). */
 export function resetAssistProvider() {
   provider = stubProvider;
 }
@@ -64,161 +26,136 @@ export function getProviderName() {
   return provider.providerName || 'stub';
 }
 
-// ---------------------------------------------------------------------------
-// Real vision-provider adapter (Amazon Nova Pro via Amazon Bedrock) behind the
-// same provider interface.
-//
-// `novaProvider(...)` returns a provider function with the SAME contract as the
-// stub: async (input) => { taxonId, confidence, reasoning:string[],
-// alternatives? } which `applyConfidencePolicy` then gates. The BROWSER side
-// never talks to AWS directly and never imports `@aws-sdk/*`. Instead it POSTs
-// the photo (base64 + format + optional hint) to a LOCAL Vite dev proxy at
-// `/api/identify`, which calls Bedrock Converse with Amazon Nova Pro
-// (`us.amazon.nova-pro-v1:0`) using local AWS-profile credentials server-side.
-//
-// Two framings:
-//   - LOCAL DEV ("live"): `npm run dev` exposes /api/identify, so this adapter
-//     gets real Nova Pro answers.
-//   - STATIC DEPLOY ("fallback"): the deployed static site has no proxy, so the
-//     POST 404s/fails and the adapter AUTOMATICALLY falls back to the built-in
-//     stub for that call. The public demo therefore needs no backend/keys.
-//
-// applyConfidencePolicy and the thresholds are unchanged — the responsible-AI
-// gate is identical regardless of provider.
-//
-// SECURITY: no API keys live in the client. AWS credentials are resolved ONLY
-// server-side (the dev proxy) from the local AWS profile. There are no VITE_
-// AWS variables (those would leak into the client bundle).
-// ---------------------------------------------------------------------------
-
-const NOVA_DEFAULT_ENDPOINT = '/api/identify';
-
-/**
- * Factory for a real Amazon Nova Pro (Bedrock) vision provider.
- * @param {{fetchImpl?:Function, endpoint?:string}} [opts]
- *   - fetchImpl defaults to the global fetch (injectable so tests mock the
- *               network with NO real calls / no AWS)
- *   - endpoint  the local dev-proxy path (defaults to /api/identify)
- * Expected input fields: `input.imageBase64` (raw base64 of the photo) +
- * `input.imageFormat`, plus `input.hintTaxonId`. `input.photoName`/`seed` are
- * also accepted and forwarded to the stub fallback for deterministic offline
- * behavior.
- * @returns {(input:object) => Promise<{taxonId:string|null, confidence:number, reasoning:string[], cues:string[], alternatives:any[]}>}
- */
 export function novaProvider(opts = {}) {
   const { fetchImpl, endpoint = NOVA_DEFAULT_ENDPOINT } = opts;
   const doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : undefined);
 
   async function fn(input = {}) {
-    // No fetch available (node without fetch) -> stub.
-    if (!doFetch) {
-      return stubProvider(input);
-    }
-    // Nothing for Nova to see (filename-only path) -> stub, no network call.
-    if (!input.imageBase64) {
-      return stubProvider(input);
-    }
+    if (!doFetch || !input.imageBase64) return fallbackResult(input);
+
+    const controller = new AbortController();
+    let timeoutFired = false;
+    let timeoutId;
+    const timeout = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        timeoutFired = true;
+        controller.abort();
+        const error = new Error('Nova request timed out');
+        error.name = 'AbortError';
+        reject(error);
+      }, NOVA_TIMEOUT_MS);
+    });
+
     try {
-      const res = await doFetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          imageBase64: input.imageBase64,
-          imageFormat: input.imageFormat,
-          hintTaxonId: input.hintTaxonId,
+      const response = await Promise.race([
+        doFetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: input.imageBase64,
+            imageFormat: input.imageFormat,
+          }),
+          signal: controller.signal,
         }),
-      });
-      // fetch threw already handled below; here cover falsy/non-OK (incl. 404
-      // when the proxy is absent on a static deploy).
-      if (!res || !res.ok) {
-        return stubProvider(input);
-      }
-      const data = await res.json();
-      const taxonId = normalizeKnownId(data?.taxonId);
-      const confidence = clamp01(data?.confidence);
-      const cues = Array.isArray(data?.cues)
-        ? data.cues.filter((s) => typeof s === 'string')
-        : [];
-      // `reasoning` is the policy's field name; `cues` is the proxy's name —
-      // keep both identical so either consumer sees the same strings.
-      return { taxonId, confidence, reasoning: cues, cues, alternatives: [] };
-    } catch {
-      // Any failure (fetch throws / timeout / proxy absent) -> stub fallback.
-      return stubProvider(input);
+        timeout,
+      ]);
+      if (!response?.ok) return fallbackResult(input);
+
+      const data = await response.json();
+      if (!isNovaGuess(data)) return fallbackResult(input);
+
+      const cues = normalizeCues(data.cues);
+      return {
+        taxonId: normalizeKnownId(data.taxonId),
+        confidence: clamp01(data.confidence),
+        reasoning: cues,
+        cues,
+        alternatives: [],
+        provider: 'nova-vision',
+      };
+    } catch (error) {
+      // Only an AbortError raised after this provider's timer fires is its
+      // 15-second timeout. Other aborts remain ordinary transport failures.
+      if (error?.name === 'AbortError' && timeoutFired) return fallbackResult(input);
+      return fallbackResult(input);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
+
   fn.providerName = 'nova-vision';
   return fn;
 }
 
-/** Map an arbitrary label to one of our known taxon ids, or null. */
+function isNovaGuess(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    (value.taxonId === null || typeof value.taxonId === 'string') &&
+    typeof value.confidence === 'number' && Number.isFinite(value.confidence) &&
+    (value.cues === undefined ||
+      (Array.isArray(value.cues) && value.cues.every((cue) => typeof cue === 'string')));
+}
+
 function normalizeKnownId(label) {
   if (typeof label !== 'string') return null;
   const id = label.trim().toLowerCase();
   return getTaxon(id) ? id : null;
 }
 
-
-/**
- * Ask the assist to identify the organism in `input`.
- * @param {{photoName?:string, hintTaxonId?:string, seed?:number}} input
- * @returns {Promise<AssistResult>}
- */
-export async function identifyTaxon(input = {}) {
-  const raw = await provider(input);
-  return applyConfidencePolicy(raw, getProviderName());
+function normalizeCues(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((cue) => typeof cue === 'string' ? cue.trim().slice(0, MAX_CUE_LENGTH) : '')
+    .filter(Boolean)
+    .slice(0, MAX_CUES);
 }
 
-/**
- * Turn a raw provider guess into a policy-gated result. Pure + exported so it
- * can be unit-tested independently of any provider.
- * @param {{taxonId:string, confidence:number, reasoning:string[], alternatives?:any[]}} raw
- * @param {string} providerName
- * @returns {AssistResult}
- */
-export function applyConfidencePolicy(raw, providerName = 'stub') {
-  const confidence = clamp01(raw?.confidence ?? 0);
-  const reasoning = Array.isArray(raw?.reasoning) ? raw.reasoning : [];
-  const alternatives = (raw?.alternatives || []).map((a) => ({
-    taxonId: a.taxonId,
-    confidence: clamp01(a.confidence),
-  }));
+export async function identifyTaxon(input = {}) {
+  const raw = await provider(input);
+  return applyConfidencePolicy(raw, raw?.provider);
+}
 
-  // Below the review threshold => defer to the human, no suggestion.
-  if (!raw?.taxonId || confidence < REVIEW_THRESHOLD) {
+export function applyConfidencePolicy(raw, providerName = raw?.provider || 'stub') {
+  const confidence = clamp01(raw?.confidence ?? 0);
+  const taxonId = normalizeKnownId(raw?.taxonId);
+  const reasoning = normalizeCues(raw?.reasoning ?? raw?.cues);
+  const alternatives = Array.isArray(raw?.alternatives)
+    ? raw.alternatives
+      .map((alternative) => ({
+        taxonId: normalizeKnownId(alternative?.taxonId),
+        confidence: clamp01(alternative?.confidence),
+      }))
+      .filter((alternative) => alternative.taxonId)
+      .slice(0, MAX_ALTERNATIVES)
+    : [];
+
+  if (!taxonId || confidence < REVIEW_THRESHOLD) {
     return {
       status: 'defer',
       taxonId: null,
       confidence,
-      reasoning:
-        reasoning.length > 0
-          ? reasoning
-          : ['The image is unclear or ambiguous. A person should decide this one.'],
+      reasoning: reasoning.length > 0
+        ? reasoning
+        : ['The image is unclear or ambiguous. A person should decide this one.'],
       alternatives,
       provider: providerName,
     };
   }
 
-  const status = confidence >= CONFIDENT_THRESHOLD ? 'suggested' : 'review';
-  return { status, taxonId: raw.taxonId, confidence, reasoning, alternatives, provider: providerName };
+  return {
+    status: confidence >= CONFIDENT_THRESHOLD ? 'suggested' : 'review',
+    taxonId,
+    confidence,
+    reasoning,
+    alternatives,
+    provider: providerName,
+  };
 }
 
-function clamp01(n) {
-  n = Number(n) || 0;
-  return Math.max(0, Math.min(1, n));
+function clamp01(value) {
+  const number = typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  return Math.max(0, Math.min(1, number));
 }
 
-// ---------------------------------------------------------------------------
-// Default STUB provider.
-//
-// Produces realistic, explainable suggestions without any network/model. It is
-// deterministic given an input (so demos are repeatable) but varies across
-// inputs so it feels real. The reasoning strings are taxon-appropriate visual
-// cues drawn from the same recognition hints citizens see, which keeps the
-// explanation honest rather than fabricated.
-// ---------------------------------------------------------------------------
-
-// Distinguishing visual cues per taxon, phrased as "what the model saw".
 const CUES = {
   stonefly: ['Two long tails visible', 'Two claws on each leg', 'No gills along the belly'],
   mayfly: ['Three tails detected', 'Feathery gills along the abdomen', 'Slender streamlined body'],
@@ -234,52 +171,44 @@ const CUES = {
 };
 
 function stubProvider(input = {}) {
-  // Deterministic pseudo-random from the input so the same photo gives the same
-  // answer within a session, but different photos differ.
-  const seedStr = (input.photoName || '') + (input.hintTaxonId || '') + (input.seed ?? '');
-  const rnd = mulberry32(hashStr(seedStr) || Date.now() & 0xffff);
-
-  // If the caller gives a hint (e.g. which card the photo was attached to), bias
-  // toward it — mimics a model that's usually right but not always.
-  let primaryId = input.hintTaxonId && getTaxon(input.hintTaxonId)
-    ? input.hintTaxonId
-    : TAXA[Math.floor(rnd() * TAXA.length)].id;
-
-  // Draw a confidence. Deliberately produce a spread so the demo shows all three
-  // outcomes (confident / review / defer) across a few photos.
-  let confidence = 0.35 + rnd() * 0.6; // 0.35 .. 0.95
-
-  // Occasionally the model "confuses" look-alikes: swap to an alternative and
-  // drop confidence, so the human-in-the-loop handoff is demonstrable.
+  const seedString = `${input.photoName || ''}${input.seed ?? ''}`;
+  const random = mulberry32(hashString(seedString) || (Date.now() & 0xffff));
+  let primaryId = TAXA[Math.floor(random() * TAXA.length)].id;
+  let confidence = 0.35 + random() * 0.6;
   const lookalikes = LOOKALIKES[primaryId] || [];
   let alternatives = [];
+
   if (lookalikes.length) {
-    const alt = lookalikes[Math.floor(rnd() * lookalikes.length)];
-    if (rnd() < 0.35) {
-      // model leans toward the look-alike -> lower confidence, ambiguous
+    const alternativeId = lookalikes[Math.floor(random() * lookalikes.length)];
+    if (random() < 0.35) {
       alternatives = [{ taxonId: primaryId, confidence: round2(confidence * 0.8) }];
-      primaryId = alt;
-      confidence = Math.min(confidence, 0.45 + rnd() * 0.25);
+      primaryId = alternativeId;
+      confidence = Math.min(confidence, 0.45 + random() * 0.25);
     } else {
-      alternatives = [{ taxonId: alt, confidence: round2(confidence * (0.4 + rnd() * 0.3)) }];
+      alternatives = [{
+        taxonId: alternativeId,
+        confidence: round2(confidence * (0.4 + random() * 0.3)),
+      }];
     }
   }
 
   const reasoning = (CUES[primaryId] || ['Visual features detected']).slice();
-  if (confidence < REVIEW_THRESHOLD) {
-    reasoning.push('Some key features are not clearly visible.');
-  }
+  if (confidence < REVIEW_THRESHOLD) reasoning.push('Some key features are not clearly visible.');
 
   return {
     taxonId: primaryId,
     confidence: round2(confidence),
     reasoning,
     alternatives,
+    provider: 'stub',
   };
 }
 stubProvider.providerName = 'stub';
 
-// Look-alike groups a non-expert (or a model) might confuse.
+function fallbackResult(input) {
+  return { ...stubProvider(input), provider: 'stub-fallback' };
+}
+
 const LOOKALIKES = {
   stonefly: ['mayfly'],
   mayfly: ['stonefly'],
@@ -290,24 +219,25 @@ const LOOKALIKES = {
   leech: ['worm'],
 };
 
-// --- tiny deterministic RNG helpers ---
-function hashStr(s) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
+function hashString(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index++) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  return h >>> 0;
+  return hash >>> 0;
 }
-function mulberry32(a) {
-  return function () {
-    a |= 0;
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+
+function mulberry32(seed) {
+  return function random() {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let value = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
 }
-function round2(n) {
-  return Math.round(n * 100) / 100;
+
+function round2(value) {
+  return Math.round(value * 100) / 100;
 }

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import seed from './data/seed-streams.json';
 import { STEPS, elapsedSeconds, newAssessment } from './core/assessment.js';
 import { buildContext, fetchRecentRain } from './core/context.js';
+import { identifyTaxon } from './core/ai-assist.js';
+import { blobToBase64 } from './core/photo.js';
 import { scoreAssessment } from './core/biotic-index.js';
 import { loadLegacyHistory, mergedHistory } from './core/history.js';
 import {
@@ -51,6 +53,9 @@ function AppInner() {
   const [operationError, setOperationError] = useState(null);
   const [updateFailure, setUpdateFailure] = useState(false);
 
+  const assessmentRef = useRef(firstRecordRef.current.assessment);
+  const activeAiRequestRef = useRef(null);
+  const aiRequestIdRef = useRef(0);
   const adapterRef = useRef(null);
   const storageModeRef = useRef('memory');
   const activeTrackedRef = useRef(false);
@@ -91,7 +96,13 @@ function AppInner() {
       queuedFingerprintsRef.current.get(id) === fingerprint ||
       inFlightFingerprintsRef.current.get(id) === fingerprint
     ) return;
-    pendingJobsRef.current.set(id, { record, photoChange, reason, fingerprint });
+    const pending = pendingJobsRef.current.get(id);
+    pendingJobsRef.current.set(id, {
+      record,
+      photoChange: photoChange !== undefined ? photoChange : pending?.photoChange,
+      reason,
+      fingerprint,
+    });
     queuedFingerprintsRef.current.set(id, fingerprint);
     markUnsaved(id, true);
     queueMicrotask(() => drainSaveRef.current?.(id));
@@ -128,6 +139,7 @@ function AppInner() {
   const stageSnapshot = useCallback((record, { save = 'immediate', photoChange, reason } = {}) => {
     activeTrackedRef.current = true;
     latestSnapshotRef.current = record;
+    assessmentRef.current = record.assessment;
     activeRecordIdRef.current = record.id;
     setAssessmentRecord(record);
     upsertRecord(record);
@@ -174,9 +186,11 @@ function AppInner() {
         };
       }
       activeWeatherRequestRef.current = null;
+      activeAiRequestRef.current = null;
       activeTrackedRef.current = true;
       activeRecordIdRef.current = restored.id;
       latestSnapshotRef.current = restored;
+      assessmentRef.current = restored.assessment;
       activePhotoBlobRef.current = blob;
       setPhotoBlob(blob);
       setAssessmentRecord(restored);
@@ -260,14 +274,103 @@ function AppInner() {
     stageSnapshot({ ...current, ...recordPatch, submission: nextSubmission, assessment: nextAssessment, updatedAt }, options);
   }
 
+  function invalidateAiRequest() {
+    activeAiRequestRef.current = null;
+  }
+
   function changeCounts(counts) {
-    let aiReview = assessment.aiReview;
-    let aiAssisted = assessment.aiAssisted;
+    const currentAssessment = assessmentRef.current;
+    let aiReview = currentAssessment.aiReview;
+    let aiAssisted = currentAssessment.aiAssisted;
+    const activeHumanTaxonId = activeAiRequestRef.current?.humanTaxonId;
+    if (activeHumanTaxonId && !(counts[activeHumanTaxonId] > 0)) invalidateAiRequest();
     if (aiReview && !(counts[aiReview.human?.taxonId] > 0)) {
       aiReview = null;
       aiAssisted = false;
     }
     patchRecord({ assessmentPatch: { counts, aiReview, aiAssisted } }, { save: 'debounced', reason: 'counts' });
+  }
+
+  function handlePhotoChange({ metadata, blob }) {
+    invalidateAiRequest();
+    activePhotoBlobRef.current = blob;
+    setPhotoBlob(blob);
+    patchRecord(
+      { assessmentPatch: { photo: metadata, photoConfirmed: true, aiReview: null, aiAssisted: false } },
+      { photoChange: { metadata, blob }, reason: 'photo' },
+    );
+  }
+
+  function handlePhotoRemove() {
+    invalidateAiRequest();
+    activePhotoBlobRef.current = null;
+    setPhotoBlob(null);
+    patchRecord(
+      { assessmentPatch: { photo: null, photoConfirmed: false, aiReview: null, aiAssisted: false } },
+      { photoChange: null, reason: 'photo-remove' },
+    );
+  }
+
+  async function handleAiAnalysis({ humanTaxonId, photoId }) {
+    const currentAssessment = assessmentRef.current;
+    const blob = activePhotoBlobRef.current;
+    if (
+      currentAssessment.photo?.id !== photoId ||
+      !(currentAssessment.counts?.[humanTaxonId] > 0) ||
+      !(blob instanceof Blob)
+    ) return null;
+
+    const tuple = { requestId: ++aiRequestIdRef.current, photoId, humanTaxonId };
+    activeAiRequestRef.current = tuple;
+    const imageBase64 = await blobToBase64(blob);
+    const imageFormat = currentAssessment.photo.type === 'image/png' ? 'png' : 'jpeg';
+    const result = await identifyTaxon({
+      imageBase64,
+      imageFormat,
+      photoName: currentAssessment.photo.name,
+      seed: currentAssessment.photo.name.length,
+    });
+
+    const active = activeAiRequestRef.current;
+    const latestAssessment = assessmentRef.current;
+    if (
+      !active ||
+      active.requestId !== tuple.requestId ||
+      active.photoId !== tuple.photoId ||
+      active.humanTaxonId !== tuple.humanTaxonId ||
+      latestAssessment.photo?.id !== tuple.photoId ||
+      !(latestAssessment.counts?.[tuple.humanTaxonId] > 0)
+    ) return null;
+
+    activeAiRequestRef.current = null;
+    const analyzedAt = new Date().toISOString();
+    const aiReview = {
+      human: {
+        taxonId: tuple.humanTaxonId,
+        source: 'citizen-count',
+        confirmedAt: analyzedAt,
+      },
+      model: {
+        photoId: tuple.photoId,
+        taxonId: result.taxonId,
+        confidence: result.confidence,
+        policyStatus: result.status,
+        provider: result.provider,
+        cues: result.reasoning,
+        alternatives: result.alternatives,
+        analyzedAt,
+      },
+      outcome: result.status === 'defer'
+        ? 'defer'
+        : result.taxonId === tuple.humanTaxonId
+          ? 'agreement'
+          : 'disagreement',
+    };
+    patchRecord(
+      { assessmentPatch: { aiReview, aiAssisted: true } },
+      { save: 'immediate', reason: 'ai-review' },
+    );
+    return aiReview;
   }
 
   function go(nextIndex) {
@@ -314,9 +417,11 @@ function AppInner() {
 
   function startRecord(streamId) {
     activeWeatherRequestRef.current = null;
+    activeAiRequestRef.current = null;
     const record = createPendingRecord(newAssessment(streamId));
     activeRecordIdRef.current = record.id;
     latestSnapshotRef.current = record;
+    assessmentRef.current = record.assessment;
     activePhotoBlobRef.current = null;
     setPhotoBlob(null);
     setAssessmentRecord(record);
@@ -433,7 +538,7 @@ function AppInner() {
             <FieldRecords records={records} streams={streams} activeRecordId={assessmentRecord.id} unsavedIds={unsavedIds} onResume={resumeRecord} onExport={exportRecord} onDelete={deleteRecord} operationError={operationError} />
           ) : <div key={`step-${stepIndex}`} className="anim-fade-up">
             {step.key === 'stream' && <StepStream streamId={assessment.streamId} onPick={(id) => patchRecord({ assessmentPatch: { streamId: id }, rain: null }, { reason: 'stream' })} landUse={landUse} onLandUse={(value) => patchRecord({ landUse: value }, { reason: 'land-use' })} historyByStream={historyByStream} onNext={() => go(1)} />}
-            {step.key === 'assess' && <StepAssess counts={assessment.counts} onChange={changeCounts} onPhotoConfirmed={() => patchRecord({ assessmentPatch: { photoConfirmed: Boolean(assessment.photo), aiAssisted: assessment.aiAssisted } }, { reason: 'photo' })} onPhotoChange={({ metadata, blob }) => { activePhotoBlobRef.current = blob; setPhotoBlob(blob); patchRecord({ assessmentPatch: { photo: metadata, photoConfirmed: true, aiReview: null, aiAssisted: false } }, { photoChange: { metadata, blob }, reason: 'photo' }); }} onPhotoRemove={() => { activePhotoBlobRef.current = null; setPhotoBlob(null); patchRecord({ assessmentPatch: { photo: null, photoConfirmed: false, aiReview: null, aiAssisted: false } }, { photoChange: null, reason: 'photo-remove' }); }} onBack={() => go(0)} onNext={() => go(2)} />}
+            {step.key === 'assess' && <StepAssess counts={assessment.counts} photo={assessment.photo} photoReady={Boolean(photoBlob && assessment.photo)} aiReview={assessment.aiReview} onChange={changeCounts} onPhotoChange={handlePhotoChange} onPhotoRemove={handlePhotoRemove} onAnalyze={handleAiAnalysis} onBack={() => go(0)} onNext={() => go(2)} />}
             {step.key === 'result' && <StepResult counts={assessment.counts} streamName={stream?.name} submission={submission} onBack={() => go(1)} onNext={goOneHealth} onRestart={restart} />}
             {step.key === 'onehealth' && <StepOneHealth counts={assessment.counts} context={context} onBack={() => go(2)} onNext={() => go(4)} />}
             {step.key === 'fhir' && <StepFhir stream={stream} counts={assessment.counts} submission={submission} context={context} onBundleReady={handleBundleReady} onBack={() => go(3)} onRestart={restart} />}

@@ -6,8 +6,6 @@ import {
   resetAssistProvider,
   getProviderName,
   novaProvider,
-  CONFIDENT_THRESHOLD,
-  REVIEW_THRESHOLD,
 } from './ai-assist.js';
 import { TAXON_IDS } from './taxa.js';
 
@@ -49,8 +47,11 @@ describe('confidence policy (responsible-AI gate)', () => {
     expect(r.taxonId).toBeNull();
   });
 
-  it('thresholds are ordered sensibly', () => {
-    expect(REVIEW_THRESHOLD).toBeLessThan(CONFIDENT_THRESHOLD);
+  it('keeps the exact review and suggested boundaries', () => {
+    expect(applyConfidencePolicy({ taxonId: 'mayfly', confidence: 0.49 }, 'stub').status).toBe('defer');
+    expect(applyConfidencePolicy({ taxonId: 'mayfly', confidence: 0.5 }, 'stub').status).toBe('review');
+    expect(applyConfidencePolicy({ taxonId: 'mayfly', confidence: 0.74 }, 'stub').status).toBe('review');
+    expect(applyConfidencePolicy({ taxonId: 'mayfly', confidence: 0.75 }, 'stub').status).toBe('suggested');
   });
 
   it('always returns reasoning, even on defer', () => {
@@ -75,7 +76,7 @@ describe('stub provider via identifyTaxon', () => {
   });
 
   it('returns a valid taxon id when it suggests one', async () => {
-    const r = await identifyTaxon({ hintTaxonId: 'mayfly', photoName: 'm.jpg', seed: 1 });
+    const r = await identifyTaxon({ photoName: 'm.jpg', seed: 1 });
     if (r.taxonId !== null) {
       expect(TAXON_IDS).toContain(r.taxonId);
     }
@@ -101,6 +102,7 @@ describe('swappable provider', () => {
       taxonId: 'stonefly',
       confidence: 0.95,
       reasoning: ['two tails', 'no belly gills'],
+      provider: 'fake-vision-llm',
     });
     fake.providerName = 'fake-vision-llm';
     setAssistProvider(fake);
@@ -135,6 +137,9 @@ describe('real vision provider (nova adapter)', () => {
 
     const raw = await provider({ imageBase64: 'QUJD', imageFormat: 'jpeg' });
     expect(mock).toHaveBeenCalledTimes(1);
+    const request = mock.mock.calls[0][1];
+    expect(JSON.parse(request.body)).toEqual({ imageBase64: 'QUJD', imageFormat: 'jpeg' });
+    expect(request.signal).toBeInstanceOf(AbortSignal);
 
     // mapped shape
     expect(TAXON_IDS).toContain(raw.taxonId);
@@ -144,6 +149,7 @@ describe('real vision provider (nova adapter)', () => {
     expect(Array.isArray(raw.reasoning)).toBe(true);
     expect(raw.reasoning.length).toBeGreaterThan(0);
     expect(raw.reasoning).toEqual(raw.cues); // proxy names it `cues`; policy uses `reasoning`
+    expect(raw.provider).toBe('nova-vision');
 
     // and it flows through the unchanged confidence policy
     const gated = applyConfidencePolicy(raw, 'nova-vision');
@@ -173,6 +179,7 @@ describe('real vision provider (nova adapter)', () => {
     expect(r.confidence).toBeGreaterThanOrEqual(0);
     expect(r.confidence).toBeLessThanOrEqual(1);
     expect(Array.isArray(r.reasoning)).toBe(true);
+    expect(r.provider).toBe('stub-fallback');
     // deterministic for the same input (stub fallback stays repeatable)
     const r2 = await provider({ imageBase64: 'QUJD', photoName: 'p.jpg', seed: 2 });
     expect(r).toEqual(r2);

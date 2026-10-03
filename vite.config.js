@@ -34,12 +34,9 @@ function normalizeImageFormat(fmt) {
   return 'jpeg';
 }
 
-/** Build the vision prompt listing allowed taxa + a soft hint. */
-function buildPrompt(hintTaxonId) {
+/** Build the neutral vision prompt listing allowed taxa. */
+function buildPrompt() {
   const known = TAXA.map((t) => `${t.id} (${t.commonName})`).join(', ');
-  const hint = getTaxon(hintTaxonId)
-    ? ` If — and only if — it is plausible given the image, the user suspects this may be "${hintTaxonId}"; treat that as a soft hint, never as the forced answer.`
-    : '';
   return (
     'You identify a single freshwater streambed macroinvertebrate in the image ' +
     'for a citizen-science biotic-index app. Respond with ONLY compact JSON of ' +
@@ -47,7 +44,7 @@ function buildPrompt(hintTaxonId) {
     '"confidence": <number 0..1>, "cues": [<short visual-cue strings>]}. ' +
     'Allowed taxon ids (with common names): ' + known + '. ' +
     'Use null for taxonId if you cannot tell. Do not wrap the JSON in code ' +
-    'fences or add any prose.' + hint
+    'fences or add any prose.'
   );
 }
 
@@ -154,7 +151,7 @@ function novaProxyPlugin() {
           return sendJson(res, 400, { error: 'invalid JSON body' });
         }
 
-        const { imageBase64, imageFormat, hintTaxonId } = body || {};
+        const { imageBase64, imageFormat } = body || {};
         if (typeof imageBase64 !== 'string' || imageBase64.length === 0) {
           return sendJson(res, 400, { error: 'imageBase64 is required' });
         }
@@ -170,7 +167,7 @@ function novaProxyPlugin() {
 
           const bytes = new Uint8Array(Buffer.from(imageBase64, 'base64'));
           const format = normalizeImageFormat(imageFormat);
-          const prompt = buildPrompt(hintTaxonId);
+          const prompt = buildPrompt();
 
           const client = new BedrockRuntimeClient({
             region: process.env.AWS_REGION || 'us-east-1',
