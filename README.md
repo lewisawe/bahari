@@ -33,7 +33,7 @@ the assessment flow.
 
 ```bash
 npm install
-npm test              # full vitest suite (132 passing): science, AI policy, reliability, One Health, FHIR, a11y, i18n, aggregate
+npm test              # full vitest suite (147 passing): science, AI policy, reliability, One Health, FHIR, a11y, i18n, aggregate
 npm run dev           # start the dev server (http://localhost:5173)
 npm run build         # production build to dist/
 npm run seed          # (optional) rebuild the real-data seed from the GBIF API
