@@ -2,6 +2,15 @@
 
 import { healthColorForClass } from './health-colors.js';
 
+/** Latest scored value from one authoritative history array. */
+export function latestFromHistory(history = []) {
+  const scored = (Array.isArray(history) ? history : [])
+    .filter((entry) => Number.isFinite(entry?.score));
+  if (scored.length === 0) return null;
+  const last = scored[scored.length - 1];
+  return { score: last.score, classKey: last.classKey };
+}
+
 /**
  * The latest known score/class for a stream, preferring the user's own saved
  * assessments over seed sample history. Returns null if nothing scored.
@@ -12,10 +21,7 @@ import { healthColorForClass } from './health-colors.js';
 export function latestForStream(stream, userHistory = []) {
   const seed = (stream?.history || []).filter((e) => typeof e.score === 'number');
   const mine = (userHistory || []).filter((e) => typeof e.score === 'number');
-  const all = [...seed, ...mine];
-  if (all.length === 0) return null;
-  const last = all[all.length - 1];
-  return { score: last.score, classKey: last.classKey };
+  return latestFromHistory([...seed, ...mine]);
 }
 
 /** Marker fill color for a stream's latest class (falls back to neutral). */

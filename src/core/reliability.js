@@ -19,8 +19,8 @@
 // contributes points and, when failed, an explanatory flag. Everything is
 // inspectable — no hidden model.
 
-import { TAXA, getTaxon } from './taxa.js';
-import { groupsFound, totalCount } from './assessment.js';
+import { getTaxon } from './taxa.js';
+import { groupsFound } from './assessment.js';
 
 /**
  * @typedef {Object} ReliabilityCheck
@@ -30,6 +30,9 @@ import { groupsFound, totalCount } from './assessment.js';
  * @property {number} points      points awarded (0..weight)
  * @property {'pass'|'warn'|'fail'} status
  * @property {string} detail      plain-language explanation
+ * @property {string} labelKey    translated dashboard label key
+ * @property {string} detailKey   translated dashboard detail key
+ * @property {Object} detailParams dynamic values for translated detail
  */
 
 /**
@@ -58,11 +61,11 @@ const PLAUSIBLE_MAX = 60;
  * Compute reliability for a submission.
  * @param {{
  *   counts: Object.<string, number>,
- *   photoConfirmed?: boolean,        // did the user attach/confirm a photo for any find?
- *   aiAssisted?: boolean,            // was an AI suggestion involved (informational)
+ *   photoConfirmed?: boolean,
+ *   aiAssisted?: boolean,
  *   location?: {lat:number, lon:number}|null,
- *   locationOnStream?: boolean,      // did geo-check place them on/near water?
- *   durationSec?: number|null,       // how long the assessment took (rushed?)
+ *   locationOnStream?: boolean,
+ *   durationSec?: number|null,
  * }} submission
  * @returns {ReliabilityResult}
  */
@@ -76,20 +79,10 @@ export function scoreReliability(submission = {}) {
   } = submission;
 
   const checks = [];
-
-  // 1. Location present + plausibly on a stream (25)
   checks.push(locationCheck(location, locationOnStream));
-
-  // 2. Effort / richness — more groups examined = more informative (25)
   checks.push(richnessCheck(counts));
-
-  // 3. Photo evidence for verification (20)
   checks.push(photoCheck(photoConfirmed));
-
-  // 4. Count plausibility — implausibly high single-group counts flag review (20)
   checks.push(plausibilityCheck(counts));
-
-  // 5. Effort time — extremely rushed submissions are less reliable (10)
   checks.push(durationCheck(durationSec));
 
   const score = Math.round(checks.reduce((a, c) => a + c.points, 0));
@@ -104,49 +97,56 @@ export function bandFor(score) {
   return BANDS[BANDS.length - 1];
 }
 
-// --- individual checks -----------------------------------------------------
-
 function locationCheck(location, onStream) {
   const w = 25;
   if (!location) {
     return mk('location', 'Location', w, 0, 'fail',
-      'No location recorded — the reading can\u2019t be placed on a stream.');
+      'No location recorded — the reading can’t be placed on a stream.',
+      'reliability.location.label', 'reliability.location.missing');
   }
   if (onStream === false) {
     return mk('location', 'Location', w, 10, 'warn',
-      'Location doesn\u2019t appear to be on or beside water — please confirm the spot.');
+      'Location doesn’t appear to be on or beside water — please confirm the spot.',
+      'reliability.location.label', 'reliability.location.offStream');
   }
-  // present, and either confirmed-on-stream or unknown-but-present
   const pts = onStream === true ? w : Math.round(w * 0.8);
   const status = onStream === true ? 'pass' : 'warn';
   const detail = onStream === true
     ? 'Location recorded and consistent with a stream.'
     : 'Location recorded; on-stream check not confirmed.';
-  return mk('location', 'Location', w, pts, status, detail);
+  const detailKey = onStream === true
+    ? 'reliability.location.confirmed'
+    : 'reliability.location.unconfirmed';
+  return mk('location', 'Location', w, pts, status, detail,
+    'reliability.location.label', detailKey);
 }
 
 function richnessCheck(counts) {
   const w = 25;
   const n = groupsFound(counts);
   if (n === 0) return mk('richness', 'Groups examined', w, 0, 'fail',
-    'No groups recorded.');
+    'No groups recorded.', 'reliability.richness.label', 'reliability.richness.none');
   if (n === 1) return mk('richness', 'Groups examined', w, 10, 'warn',
-    'Only one group recorded — a single group gives a weak picture of the stream.');
+    'Only one group recorded — a single group gives a weak picture of the stream.',
+    'reliability.richness.label', 'reliability.richness.one');
   if (n === 2) return mk('richness', 'Groups examined', w, 18, 'warn',
-    'Only two groups recorded — more groups improve reliability.');
-  // 3+ groups is a solid citizen sample
+    'Only two groups recorded — more groups improve reliability.',
+    'reliability.richness.label', 'reliability.richness.two');
   return mk('richness', 'Groups examined', w, w, 'pass',
-    `${n} groups recorded — a solid range for a citizen sample.`);
+    `${n} groups recorded — a solid range for a citizen sample.`,
+    'reliability.richness.label', 'reliability.richness.solid', { n });
 }
 
 function photoCheck(photoConfirmed) {
   const w = 20;
   if (photoConfirmed) {
     return mk('photo', 'Photo evidence', w, w, 'pass',
-      'Photo evidence attached — supports later verification.');
+      'Photo evidence attached — supports later verification.',
+      'reliability.photo.label', 'reliability.photo.attached');
   }
   return mk('photo', 'Photo evidence', w, 8, 'warn',
-    'No photo attached — findings can\u2019t be visually verified later.');
+    'No photo attached — findings can’t be visually verified later.',
+    'reliability.photo.label', 'reliability.photo.missing');
 }
 
 function plausibilityCheck(counts) {
@@ -161,27 +161,43 @@ function plausibilityCheck(counts) {
   }
   if (offenders.length === 0) {
     return mk('plausibility', 'Count plausibility', w, w, 'pass',
-      'Counts are within a believable range for a single sample.');
+      'Counts are within a believable range for a single sample.',
+      'reliability.plausibility.label', 'reliability.plausibility.pass');
   }
   return mk('plausibility', 'Count plausibility', w, 6, 'warn',
-    `Unusually high count for a single sample: ${offenders.join(', ')} — worth a reviewer check.`);
+    `Unusually high count for a single sample: ${offenders.join(', ')} — worth a reviewer check.`,
+    'reliability.plausibility.label', 'reliability.plausibility.high', {
+      offenders: offenders.join(', '),
+    });
 }
 
 function durationCheck(durationSec) {
   const w = 10;
   if (durationSec == null) {
-    // unknown — give most of the benefit of the doubt, no strong flag
     return mk('duration', 'Effort time', w, Math.round(w * 0.8), 'pass',
-      'Assessment time not recorded.');
+      'Assessment time not recorded.',
+      'reliability.duration.label', 'reliability.duration.missing');
   }
   if (durationSec < 20) {
     return mk('duration', 'Effort time', w, 3, 'warn',
-      'Very quick submission — a rushed assessment can miss groups.');
+      'Very quick submission — a rushed assessment can miss groups.',
+      'reliability.duration.label', 'reliability.duration.rushed');
   }
   return mk('duration', 'Effort time', w, w, 'pass',
-    'Enough time taken for a considered assessment.');
+    'Enough time taken for a considered assessment.',
+    'reliability.duration.label', 'reliability.duration.considered');
 }
 
-function mk(id, label, weight, points, status, detail) {
-  return { id, label, weight, points: Math.max(0, Math.min(weight, points)), status, detail };
+function mk(id, label, weight, points, status, detail, labelKey, detailKey, detailParams = {}) {
+  return {
+    id,
+    label,
+    weight,
+    points: Math.max(0, Math.min(weight, points)),
+    status,
+    detail,
+    labelKey,
+    detailKey,
+    detailParams,
+  };
 }

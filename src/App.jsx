@@ -8,7 +8,7 @@ import { scoreAssessment } from './core/biotic-index.js';
 import { loadLegacyHistory, mergedHistory } from './core/history.js';
 import {
   buildRecordExport,
-  historyMapFromRecords,
+  historyEntryFromRecord,
   migrateLegacyHistory,
   openDeviceRecords,
   recordFingerprint,
@@ -259,12 +259,9 @@ function AppInner() {
   const context = useMemo(() => buildContext({ date: assessment.createdAt, landUse, rain }), [assessment.createdAt, landUse, rain]);
   const submission = useMemo(() => buildSubmission(assessment, assessmentRecord.completedAt), [assessment, assessmentRecord.completedAt]);
 
-  const deviceHistory = useMemo(() => historyMapFromRecords(records), [records]);
-  const historyByStream = useMemo(() => {
-    const map = {};
-    for (const item of streams) map[item.id] = mergedHistory(item.history || [], deviceHistory[item.id] || []);
-    return map;
-  }, [deviceHistory, streams]);
+  const preparedHistory = useMemo(() => prepareHistory(streams, records), [records, streams]);
+  const historyByStream = preparedHistory.historyByStream;
+  const historyWarningCount = preparedHistory.warningCount;
 
   function patchRecord({ assessmentPatch, ...recordPatch }, options) {
     const current = latestSnapshotRef.current;
@@ -540,8 +537,8 @@ function AppInner() {
       {view !== 'home' && <DeviceStatus online={online} durable={durable} unsaved={unsaved} mode={storageMode} warning={storageWarning} updateState={updateState} updateFailure={updateFailure} onApplyUpdate={handleApplyUpdate} />}
 
       {view === 'home' ? <main id="main" className="flex-1 w-full"><Landing onStart={() => setView('assess')} onExplore={() => setView('overview')} /></main> : (
-        <main id="main" className="flex-1 w-full max-w-xl mx-auto px-5 py-8">
-          {view === 'overview' ? <Dashboard key="overview" streams={streams} historyByStream={historyByStream} onOpenStream={openStreamFromDashboard} /> : view === 'records' ? (
+        <main id="main" className={`flex-1 w-full mx-auto px-5 py-8 ${view === 'overview' ? 'max-w-5xl' : 'max-w-xl'}`}>
+          {view === 'overview' ? <Dashboard key="overview" streams={streams} historyByStream={historyByStream} historyWarningCount={historyWarningCount} onOpenStream={openStreamFromDashboard} /> : view === 'records' ? (
             <FieldRecords records={records} streams={streams} activeRecordId={assessmentRecord.id} unsavedIds={unsavedIds} onResume={resumeRecord} onExport={exportRecord} onDelete={deleteRecord} operationError={operationError} />
           ) : <div key={`step-${stepIndex}`} className="anim-fade-up">
             {step.key === 'stream' && <StepStream streamId={assessment.streamId} onPick={(id) => patchRecord({ assessmentPatch: { streamId: id }, rain: null }, { reason: 'stream' })} landUse={landUse} onLandUse={(value) => patchRecord({ landUse: value }, { reason: 'land-use' })} historyByStream={historyByStream} onNext={() => go(1)} />}
@@ -555,6 +552,59 @@ function AppInner() {
       <footer className="border-t border-steel text-center py-3 px-5"><span className="eyebrow">Bahari · IEEE OneAquaHealth 2026 · stream to One Health</span></footer>
     </div>
   );
+}
+
+function prepareHistory(streams, records) {
+  const historyByStream = {};
+  let warningCount = 0;
+
+  for (const stream of streams) {
+    const sourceSeedRows = Array.isArray(stream.history) ? stream.history : [];
+    const seedRows = sourceSeedRows
+      .map((entry, originalSeedIndex) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry) || !Number.isFinite(entry.score)) {
+          warningCount += 1;
+          return null;
+        }
+        return {
+          ...entry,
+          id: isValidEvidenceId(entry.id) ? entry.id : `seed:${stream.id}:${originalSeedIndex}`,
+          sourceOrder: originalSeedIndex,
+        };
+      })
+      .filter(Boolean);
+
+    const recordsForStream = records
+      .filter((record) => record?.status === 'saved' && record.assessment?.streamId === stream.id)
+      .slice()
+      .sort((a, b) =>
+        a.assessment.createdAt.localeCompare(b.assessment.createdAt) ||
+        a.id.localeCompare(b.id)
+      );
+
+    const localRows = recordsForStream
+      .map((record, localIndex) => {
+        const entry = historyEntryFromRecord(record);
+        if (!entry || !isValidEvidenceId(record.assessment?.id) || !Number.isFinite(entry.score)) {
+          warningCount += 1;
+          return null;
+        }
+        return {
+          ...entry,
+          id: record.assessment.id,
+          sourceOrder: sourceSeedRows.length + localIndex,
+        };
+      })
+      .filter(Boolean);
+
+    historyByStream[stream.id] = mergedHistory(seedRows, localRows);
+  }
+
+  return { historyByStream, warningCount };
+}
+
+function isValidEvidenceId(value) {
+  return typeof value === 'string' && value === value.trim() && value.length > 0 && value.length <= 128;
 }
 
 function createPendingRecord(assessment) {

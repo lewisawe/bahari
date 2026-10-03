@@ -321,3 +321,245 @@ body {
 .record-action:hover {
   background-color: #1e1e1e;
 }
+
+/* Researcher Trust Console. Uses the incumbent tonal layers and health data colors. */
+.trust-console {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid #313131;
+  border-radius: 8px;
+  background: #141414;
+}
+
+.trust-console__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.trust-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.55fr);
+  gap: 0.75rem;
+}
+
+.trust-range-label,
+.trust-checkbox {
+  min-height: 44px;
+  border: 1px solid #313131;
+  border-radius: 8px;
+  background: #0a0a0a;
+}
+
+.trust-range-label {
+  display: grid;
+  grid-template-columns: max-content minmax(10rem, 1fr);
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 0.75rem;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.trust-range {
+  width: 100%;
+  height: 44px;
+  accent-color: #6798ff;
+  cursor: pointer;
+}
+
+.trust-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+}
+
+.trust-checkbox input {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 auto;
+  accent-color: #6798ff;
+}
+
+.trust-checkbox span {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 0.875rem;
+  color: #ffffff;
+}
+
+.trust-checkbox small {
+  color: #a7a7a7;
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.trust-rail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 68px;
+  overflow: hidden;
+  border: 1px solid #313131;
+  border-radius: 8px;
+  background: #0a0a0a;
+}
+
+.trust-rail__segment {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.trust-rail__segment + .trust-rail__segment {
+  border-left: 1px solid #313131;
+}
+
+.trust-rail__segment--strong {
+  background: rgb(62 207 142 / 0.08);
+}
+
+.trust-rail__segment--weak {
+  background: rgb(255 157 92 / 0.08);
+}
+
+.trust-rail__value {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 1.75rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.trust-rail__segment--strong .trust-rail__value {
+  color: #3ecf8e;
+}
+
+.trust-rail__segment--weak .trust-rail__value {
+  color: #ff9d5c;
+}
+
+.selected-stream-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid #6798ff;
+  border-radius: 8px;
+  background: #141414;
+}
+
+.priority-select {
+  display: grid;
+  width: 100%;
+  min-height: 44px;
+  align-content: center;
+  justify-items: start;
+  gap: 0.125rem;
+  border-radius: 4px;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  transition: background-color 150ms ease-in-out;
+}
+
+.priority-select:hover {
+  background: #1e1e1e;
+}
+
+.evidence-badge {
+  display: inline-flex;
+  min-height: 1.75rem;
+  align-items: center;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0.2rem 0.45rem;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.625rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.evidence-badge--strong {
+  color: #3ecf8e;
+}
+
+.evidence-badge--weak {
+  color: #ff9d5c;
+}
+
+.trust-details {
+  overflow: hidden;
+  border: 1px solid #313131;
+  border-radius: 8px;
+  background: #141414;
+}
+
+.trust-details > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style-position: inside;
+}
+
+.trust-details > summary:hover {
+  background: #1e1e1e;
+}
+
+.trust-details__body {
+  padding: 1rem;
+  border-top: 1px solid #313131;
+}
+
+.recheck-record {
+  padding: 0.875rem;
+  border: 1px solid #313131;
+  border-radius: 8px;
+  background: #0a0a0a;
+}
+
+@media (max-width: 720px) {
+  .trust-console__header,
+  .selected-stream-strip {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .trust-console__header > :last-child {
+    align-self: flex-start;
+  }
+
+  .trust-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .trust-range-label {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .trust-rail {
+    grid-template-columns: 1fr;
+  }
+
+  .trust-rail__segment + .trust-rail__segment {
+    border-top: 1px solid #313131;
+    border-left: 0;
+  }
+}

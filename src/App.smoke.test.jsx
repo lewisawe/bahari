@@ -108,7 +108,7 @@ describe('Bahari guided flow', () => {
     // from the landing page, the "Explore the map" CTA opens the dashboard
     fireEvent.click(screen.getByText('Explore the map'));
     expect(screen.getByText('Health distribution')).toBeTruthy();
-    expect(screen.getByText(/most stressed first/i)).toBeTruthy();
+    expect(screen.getByText('Fieldwork priority')).toBeTruthy();
   });
 
   it('switches language to French and translates the UI', () => {

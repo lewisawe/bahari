@@ -1,13 +1,13 @@
 // Bahari — aggregate analytics for the researcher dashboard.
 //
-// Turns the full set of streams (seed sample history + the user's own saved
-// assessments) into catchment-scale insight: how many streams sit in each
-// health class, average score, trend mix, and total assessment count. Pure and
-// testable; the dashboard renders whatever this returns.
+// Turns identity-annotated assessment history into record-level trust evidence,
+// then projects the active evidence set back into catchment-scale analytics.
+// Reliability never changes the ecological score or class.
 
-import { latestForStream } from './map-utils.js';
+import { latestFromHistory } from './map-utils.js';
 import { trend } from './history.js';
 import { classify } from './biotic-index.js';
+import { scoreReliability } from './reliability.js';
 
 const CLASS_ORDER = ['natural', 'good', 'fair', 'poor', 'very_poor'];
 const CLASS_LABEL = {
@@ -17,10 +17,11 @@ const CLASS_LABEL = {
   poor: 'Poor',
   very_poor: 'Very poor',
 };
+const HIGH_CONCERN_CLASSES = new Set(['poor', 'very_poor']);
 
 /**
  * @param {Array} streams  seed streams (each may carry sample history)
- * @param {Object.<string,Array>} [historyByStream]  merged history per stream id
+ * @param {Object.<string,Array>} [historyByStream] authoritative history per stream id
  * @returns {{
  *   streamCount:number,
  *   assessedCount:number,
@@ -41,11 +42,14 @@ export function aggregate(streams = [], historyByStream = {}) {
   let assessmentTotal = 0;
 
   for (const s of streams) {
-    const hist = historyByStream[s.id] || s.history || [];
-    const scored = hist.filter((e) => typeof e.score === 'number');
+    const suppliedHistory = Object.prototype.hasOwnProperty.call(historyByStream, s.id)
+      ? historyByStream[s.id]
+      : s.history || [];
+    const hist = Array.isArray(suppliedHistory) ? suppliedHistory : [];
+    const scored = hist.filter((e) => Number.isFinite(e?.score));
     assessmentTotal += scored.length;
 
-    const latest = latestForStream(s, historyByStream[s.id]);
+    const latest = latestFromHistory(hist);
     const t = trend(hist);
     if (t.direction === 'improving' || t.direction === 'declining' || t.direction === 'stable') {
       trendMix[t.direction] += 1;
@@ -79,7 +83,6 @@ export function aggregate(streams = [], historyByStream = {}) {
     color: colorForClass(k),
   }));
 
-  // sort rows worst-first so a researcher sees problem streams at the top
   rows.sort((a, b) => (a.score ?? 99) - (b.score ?? 99));
 
   return {
@@ -92,6 +95,186 @@ export function aggregate(streams = [], historyByStream = {}) {
     trendMix,
     rows,
   };
+}
+
+export function normalizeThreshold(value, previous = 75) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return previous;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+export function meetsReliabilityThreshold(record, threshold) {
+  return Number.isFinite(record?.reliability?.score) &&
+    record.reliability.score >= normalizeThreshold(threshold, 75);
+}
+
+export function buildEvidenceRecords(streams = [], historyByStream = {}) {
+  const records = [];
+
+  for (const stream of streams) {
+    const history = Array.isArray(historyByStream[stream.id]) ? historyByStream[stream.id] : [];
+    for (const entry of history) {
+      if (
+        !entry ||
+        typeof entry !== 'object' ||
+        Array.isArray(entry) ||
+        !isValidEvidenceId(entry.id) ||
+        !Number.isInteger(entry.sourceOrder) ||
+        !Number.isFinite(entry.score)
+      ) continue;
+
+      const submission = entry.submission && typeof entry.submission === 'object'
+        ? entry.submission
+        : {};
+      const counts = submission.counts && typeof submission.counts === 'object'
+        ? submission.counts
+        : entry.counts && typeof entry.counts === 'object'
+          ? entry.counts
+          : {};
+      const location = isFiniteLocation(submission.location) ? submission.location : null;
+      const locationOnStream = typeof submission.locationOnStream === 'boolean'
+        ? submission.locationOnStream
+        : null;
+      const photoConfirmed = submission.photoConfirmed === true;
+      const durationSec = Number.isFinite(submission.durationSec) && submission.durationSec >= 0
+        ? submission.durationSec
+        : null;
+      const reliability = scoreReliability({
+        counts,
+        location,
+        locationOnStream,
+        photoConfirmed,
+        durationSec,
+      });
+      const classKey = typeof entry.classKey === 'string'
+        ? entry.classKey
+        : classify(entry.score).key;
+      const provenance = entry.mine === true ? 'local' : 'seed';
+
+      records.push({
+        id: entry.id,
+        streamId: stream.id,
+        streamName: stream.name,
+        country: stream.country,
+        date: typeof entry.date === 'string' ? entry.date : '',
+        score: entry.score,
+        classKey,
+        counts: { ...counts },
+        submission: {
+          counts: { ...counts },
+          location,
+          locationOnStream,
+          photoConfirmed,
+          durationSec,
+        },
+        provenance,
+        mine: provenance === 'local',
+        synthetic: provenance === 'seed',
+        reliability,
+        highConcern: HIGH_CONCERN_CLASSES.has(classKey),
+        sourcePresence: {
+          location: location !== null,
+          locationOnStream: locationOnStream !== null,
+          photo: photoConfirmed,
+          duration: durationSec !== null,
+        },
+        sourceOrder: entry.sourceOrder,
+      });
+    }
+  }
+
+  return records;
+}
+
+export function summarizeTrust(records = [], threshold = 75) {
+  const summary = {
+    total: records.length,
+    meetsThreshold: 0,
+    belowThreshold: 0,
+    highConcernStrong: 0,
+    highConcernWeak: 0,
+  };
+
+  for (const record of records) {
+    const strong = meetsReliabilityThreshold(record, threshold);
+    if (strong) summary.meetsThreshold += 1;
+    else summary.belowThreshold += 1;
+    if (record.highConcern && strong) summary.highConcernStrong += 1;
+    if (record.highConcern && !strong) summary.highConcernWeak += 1;
+  }
+
+  return summary;
+}
+
+export function filterEvidenceRecords(records = [], { trustedOnly = false, threshold = 75 } = {}) {
+  if (!trustedOnly) return [...records];
+  return records.filter((record) => meetsReliabilityThreshold(record, threshold));
+}
+
+export function historyByStreamFromEvidence(records = [], streams = []) {
+  const historyByStream = Object.fromEntries(streams.map((stream) => [stream.id, []]));
+  for (const record of records) {
+    if (!Object.prototype.hasOwnProperty.call(historyByStream, record.streamId)) continue;
+    historyByStream[record.streamId].push({
+      id: record.id,
+      date: record.date,
+      score: record.score,
+      classKey: record.classKey,
+      counts: { ...record.counts },
+      submission: {
+        ...record.submission,
+        counts: { ...record.counts },
+      },
+      mine: record.mine,
+      synthetic: record.synthetic,
+      sourceOrder: record.sourceOrder,
+    });
+  }
+  return historyByStream;
+}
+
+export function buildPriorityRows(records = [], streams = [], threshold = 75) {
+  const latestByStream = new Map();
+
+  records.forEach((record, inputOrder) => {
+    const current = latestByStream.get(record.streamId);
+    if (
+      !current ||
+      String(record.date).localeCompare(String(current.record.date)) > 0 ||
+      String(record.date).localeCompare(String(current.record.date)) === 0 && inputOrder > current.inputOrder
+    ) {
+      latestByStream.set(record.streamId, { record, inputOrder });
+    }
+  });
+
+  const streamById = new Map(streams.map((stream) => [stream.id, stream]));
+  return [...latestByStream.values()]
+    .map(({ record }) => {
+      const stream = streamById.get(record.streamId);
+      const strong = meetsReliabilityThreshold(record, threshold);
+      return {
+        ...record,
+        streamName: stream?.name ?? record.streamName ?? record.streamId,
+        country: stream?.country ?? record.country ?? '',
+        strong,
+        meetsThreshold: strong,
+      };
+    })
+    .sort((a, b) =>
+      a.score - b.score ||
+      Number(b.strong) - Number(a.strong) ||
+      b.reliability.score - a.reliability.score ||
+      a.streamName.localeCompare(b.streamName)
+    );
+}
+
+function isValidEvidenceId(value) {
+  return typeof value === 'string' && value === value.trim() && value.length > 0 && value.length <= 128;
+}
+
+function isFiniteLocation(value) {
+  return value && typeof value === 'object' &&
+    Number.isFinite(value.lat) && Number.isFinite(value.lon);
 }
 
 function colorForClass(k) {
