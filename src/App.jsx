@@ -8,6 +8,7 @@ import { scoreAssessment } from './core/biotic-index.js';
 import { loadLegacyHistory, mergedHistory } from './core/history.js';
 import {
   buildRecordExport,
+  DeviceStorageError,
   historyEntryFromRecord,
   migrateLegacyHistory,
   openDeviceRecords,
@@ -66,6 +67,8 @@ function AppInner() {
   const weatherRequestIdRef = useRef(0);
   const countTimerRef = useRef(null);
   const pendingJobsRef = useRef(new Map());
+  const pendingPhotoMutationsRef = useRef(new Map());
+  const photoMutationIdRef = useRef(0);
   const runningIdsRef = useRef(new Set());
   const queuedFingerprintsRef = useRef(new Map());
   const inFlightFingerprintsRef = useRef(new Map());
@@ -91,15 +94,22 @@ function AppInner() {
   const enqueueSave = useCallback(({ record, photoChange, reason = 'autosave' }) => {
     const fingerprint = recordFingerprint(record);
     const id = record.id;
+    if (photoChange !== undefined) {
+      pendingPhotoMutationsRef.current.set(id, {
+        id: ++photoMutationIdRef.current,
+        change: photoChange,
+      });
+    }
     if (
-      lastDurableFingerprintByRecord.current.get(id) === fingerprint ||
-      queuedFingerprintsRef.current.get(id) === fingerprint ||
-      inFlightFingerprintsRef.current.get(id) === fingerprint
+      photoChange === undefined &&
+      !pendingPhotoMutationsRef.current.has(id) && (
+        lastDurableFingerprintByRecord.current.get(id) === fingerprint ||
+        queuedFingerprintsRef.current.get(id) === fingerprint ||
+        inFlightFingerprintsRef.current.get(id) === fingerprint
+      )
     ) return;
-    const pending = pendingJobsRef.current.get(id);
     pendingJobsRef.current.set(id, {
       record,
-      photoChange: photoChange !== undefined ? photoChange : pending?.photoChange,
       reason,
       fingerprint,
     });
@@ -112,16 +122,24 @@ function AppInner() {
     if (runningIdsRef.current.has(id) || !adapterRef.current) return;
     const job = pendingJobsRef.current.get(id);
     if (!job) return;
+    const photoMutation = pendingPhotoMutationsRef.current.get(id);
     pendingJobsRef.current.delete(id);
     queuedFingerprintsRef.current.delete(id);
     runningIdsRef.current.add(id);
     inFlightFingerprintsRef.current.set(id, job.fingerprint);
     try {
-      const result = await adapterRef.current.putRecord(job.record, job.photoChange);
+      const result = await adapterRef.current.putRecord(job.record, photoMutation?.change);
       if (result.durable) {
+        if (pendingPhotoMutationsRef.current.get(id)?.id === photoMutation?.id) {
+          pendingPhotoMutationsRef.current.delete(id);
+        }
         lastDurableFingerprintByRecord.current.set(id, job.fingerprint);
         const latest = id === activeRecordIdRef.current ? latestSnapshotRef.current : job.record;
-        if (recordFingerprint(latest) === job.fingerprint) markUnsaved(id, false);
+        if (
+          recordFingerprint(latest) === job.fingerprint &&
+          !pendingPhotoMutationsRef.current.has(id) &&
+          !pendingJobsRef.current.has(id)
+        ) markUnsaved(id, false);
       } else {
         markUnsaved(id, true);
       }
@@ -176,7 +194,10 @@ function AppInner() {
       let storedPhoto = null;
       try { storedPhoto = await adapterRef.current.getPhoto(id); }
       catch (error) { setStorageWarning(error); }
-      const blob = storedPhoto?.blob instanceof Blob ? storedPhoto.blob : null;
+      const blob = photoBlobForRecord(storedPhoto, record);
+      if (storedPhoto && !blob) {
+        setStorageWarning(new DeviceStorageError('storage-corrupt', 'resume-photo'));
+      }
       let restored = record;
       if (record.assessment.photo && !blob && record.assessment.aiReview) {
         restored = {
@@ -194,12 +215,13 @@ function AppInner() {
       activePhotoBlobRef.current = blob;
       setPhotoBlob(blob);
       setAssessmentRecord(restored);
-      setStepIndex(restored.lastStepIndex);
+      setStepIndex(restored.status === 'saved' ? Math.max(3, restored.lastStepIndex) : restored.lastStepIndex);
       setView('assess');
       setOperationError(null);
       if (storageModeRef.current !== 'memory') {
-        lastDurableFingerprintByRecord.current.set(restored.id, recordFingerprint(restored));
-        markUnsaved(restored.id, false);
+        const durableFingerprint = recordFingerprint(record);
+        lastDurableFingerprintByRecord.current.set(restored.id, durableFingerprint);
+        markUnsaved(restored.id, recordFingerprint(restored) !== durableFingerprint);
       }
       upsertRecord(restored);
       if (consumeQuery) clearResumeQuery();
@@ -265,6 +287,7 @@ function AppInner() {
 
   function patchRecord({ assessmentPatch, ...recordPatch }, options) {
     const current = latestSnapshotRef.current;
+    if (current.status === 'saved') return;
     const updatedAt = new Date().toISOString();
     const nextAssessment = assessmentPatch ? { ...current.assessment, ...assessmentPatch, updatedAt } : current.assessment;
     const nextSubmission = recordPatch.submission ?? buildSubmission(nextAssessment, current.completedAt);
@@ -276,6 +299,7 @@ function AppInner() {
   }
 
   function changeCounts(counts) {
+    if (latestSnapshotRef.current.status === 'saved') return;
     const currentAssessment = assessmentRef.current;
     let aiReview = currentAssessment.aiReview;
     let aiAssisted = currentAssessment.aiAssisted;
@@ -289,6 +313,7 @@ function AppInner() {
   }
 
   function handlePhotoChange({ metadata, blob }) {
+    if (latestSnapshotRef.current.status === 'saved') return;
     invalidateAiRequest();
     activePhotoBlobRef.current = blob;
     setPhotoBlob(blob);
@@ -299,6 +324,7 @@ function AppInner() {
   }
 
   function handlePhotoRemove() {
+    if (latestSnapshotRef.current.status === 'saved') return;
     invalidateAiRequest();
     activePhotoBlobRef.current = null;
     setPhotoBlob(null);
@@ -309,9 +335,11 @@ function AppInner() {
   }
 
   async function handleAiAnalysis({ humanTaxonId, photoId }) {
+    const current = latestSnapshotRef.current;
     const currentAssessment = assessmentRef.current;
     const blob = activePhotoBlobRef.current;
     if (
+      current.status !== 'pending' ||
       currentAssessment.photo?.id !== photoId ||
       !(currentAssessment.counts?.[humanTaxonId] > 0) ||
       !(blob instanceof Blob)
@@ -319,14 +347,22 @@ function AppInner() {
 
     const tuple = { requestId: ++aiRequestIdRef.current, photoId, humanTaxonId };
     activeAiRequestRef.current = tuple;
-    const imageBase64 = await blobToBase64(blob);
-    const imageFormat = currentAssessment.photo.type === 'image/png' ? 'png' : 'jpeg';
-    const result = await identifyTaxon({
-      imageBase64,
-      imageFormat,
-      photoName: currentAssessment.photo.name,
-      seed: currentAssessment.photo.name.length,
-    });
+    let result;
+    try {
+      const imageBase64 = await blobToBase64(blob);
+      const imageFormat = currentAssessment.photo.type === 'image/png' ? 'png' : 'jpeg';
+      result = await identifyTaxon({
+        imageBase64,
+        imageFormat,
+        photoName: currentAssessment.photo.name,
+        seed: currentAssessment.photo.name.length,
+      });
+    } catch (error) {
+      if (activeAiRequestRef.current !== tuple) return null;
+      activeAiRequestRef.current = null;
+      console.warn(`[Bahari AI] analysis: ${error?.name || 'Error'}`);
+      throw error;
+    }
 
     const active = activeAiRequestRef.current;
     const latestAssessment = assessmentRef.current;
@@ -372,12 +408,31 @@ function AppInner() {
 
   function go(nextIndex) {
     const bounded = Math.max(0, Math.min(STEPS.length - 1, nextIndex));
+    const current = latestSnapshotRef.current;
+    if (current.status === 'saved') {
+      if (bounded <= 1) {
+        startRecord(current.assessment.streamId, bounded);
+      } else if (bounded === 4 && current.lastStepIndex !== 4) {
+        stageSnapshot(
+          { ...current, lastStepIndex: 4, updatedAt: new Date().toISOString() },
+          { reason: 'step-transition' },
+        );
+        setStepIndex(4);
+      } else {
+        setStepIndex(bounded);
+      }
+      return;
+    }
     patchRecord({ lastStepIndex: bounded }, { reason: 'step-transition' });
     setStepIndex(bounded);
   }
 
   async function goOneHealth() {
     const current = latestSnapshotRef.current;
+    if (current.status === 'saved') {
+      setStepIndex(3);
+      return;
+    }
     const biotic = scoreAssessment(current.assessment.counts);
     if (biotic.score === null) return;
     const completedAt = current.completedAt ?? new Date().toISOString();
@@ -412,19 +467,30 @@ function AppInner() {
     }
   }
 
-  function startRecord(streamId) {
+  function startRecord(streamId, initialStepIndex = 0) {
     activeWeatherRequestRef.current = null;
     activeAiRequestRef.current = null;
-    const record = createPendingRecord(newAssessment(streamId));
+    const boundedStepIndex = Math.max(0, Math.min(STEPS.length - 1, initialStepIndex));
+    const record = {
+      ...createPendingRecord(newAssessment(streamId)),
+      lastStepIndex: boundedStepIndex,
+    };
     activeRecordIdRef.current = record.id;
     latestSnapshotRef.current = record;
     assessmentRef.current = record.assessment;
     activePhotoBlobRef.current = null;
     setPhotoBlob(null);
     setAssessmentRecord(record);
-    setStepIndex(0);
+    setStepIndex(boundedStepIndex);
     setView('assess');
     stageSnapshot(record, { reason: 'new-assessment' });
+  }
+
+  function enterAssessment() {
+    if (view === 'assess') return;
+    const current = latestSnapshotRef.current;
+    if (current?.status === 'saved') startRecord(current.assessment.streamId);
+    else setView('assess');
   }
 
   function restart() { startRecord(assessment.streamId); }
@@ -438,6 +504,9 @@ function AppInner() {
       setRecords((current) => current.filter((item) => item.id !== record.id));
       setUnsavedIds((current) => { const next = new Set(current); next.delete(record.id); return next; });
       lastDurableFingerprintByRecord.current.delete(record.id);
+      pendingJobsRef.current.delete(record.id);
+      pendingPhotoMutationsRef.current.delete(record.id);
+      queuedFingerprintsRef.current.delete(record.id);
       if (activeRecordIdRef.current === record.id) startRecord(record.assessment.streamId);
       setOperationError(null);
     } catch {
@@ -447,19 +516,38 @@ function AppInner() {
 
   async function exportRecord(id, includePhoto = false) {
     try {
-      const rawStored = await adapterRef.current?.getRecord(id);
-      const stored = rawStored ? reconstructRecord(rawStored, streams, setStorageWarning) : records.find((record) => record.id === id);
-      const source = selectRecordExportSource({
-        id,
-        activeRecordId: activeRecordIdRef.current,
-        latestSnapshot: latestSnapshotRef.current,
-        lastDurableFingerprint: lastDurableFingerprintByRecord.current.get(id),
-        storedRecord: stored,
-      });
+      const latest = latestSnapshotRef.current;
+      let source = id === activeRecordIdRef.current && latest?.id === id ? latest : null;
+      if (!source) {
+        const rawStored = await adapterRef.current?.getRecord(id);
+        const stored = rawStored
+          ? reconstructRecord(rawStored, streams, setStorageWarning)
+          : records.find((record) => record.id === id);
+        source = selectRecordExportSource({
+          id,
+          activeRecordId: activeRecordIdRef.current,
+          latestSnapshot: latest,
+          lastDurableFingerprint: lastDurableFingerprintByRecord.current.get(id),
+          storedRecord: stored,
+        });
+      }
+
       let blob = null;
       if (includePhoto) {
-        if (id === activeRecordIdRef.current) blob = activePhotoBlobRef.current;
-        if (!blob) blob = (await adapterRef.current?.getPhoto(id))?.blob ?? null;
+        if (id === activeRecordIdRef.current && blobMatchesPhoto(activePhotoBlobRef.current, source?.assessment?.photo)) {
+          blob = activePhotoBlobRef.current;
+        }
+        if (!blob) {
+          try {
+            const storedPhoto = await adapterRef.current?.getPhoto(id);
+            blob = photoBlobForRecord(storedPhoto, source);
+            if (storedPhoto && !blob) {
+              setStorageWarning(new DeviceStorageError('storage-corrupt', 'export-photo'));
+            }
+          } catch (error) {
+            setStorageWarning(error);
+          }
+        }
       }
       const payload = await buildRecordExport(source, { includePhoto, photoBlob: blob });
       downloadJson(payload, `bahari-record-${id}.json`);
@@ -505,13 +593,13 @@ function AppInner() {
       const snapshot = latestSnapshotRef.current;
       const fingerprint = recordFingerprint(snapshot);
       const pending = pendingJobsRef.current.get(snapshot.id);
-      const photoChange = pending?.fingerprint === fingerprint ? pending.photoChange : undefined;
+      const photoMutation = pendingPhotoMutationsRef.current.get(snapshot.id);
 
       runningIdsRef.current.add(snapshot.id);
       inFlightFingerprintsRef.current.set(snapshot.id, fingerprint);
       let result;
       try {
-        result = await adapterRef.current.putRecord(snapshot, photoChange);
+        result = await adapterRef.current.putRecord(snapshot, photoMutation?.change);
       } finally {
         runningIdsRef.current.delete(snapshot.id);
         inFlightFingerprintsRef.current.delete(snapshot.id);
@@ -522,6 +610,9 @@ function AppInner() {
         return { durable: false, recordId: snapshot.id, fingerprint };
       }
 
+      if (pendingPhotoMutationsRef.current.get(snapshot.id)?.id === photoMutation?.id) {
+        pendingPhotoMutationsRef.current.delete(snapshot.id);
+      }
       if (pendingJobsRef.current.get(snapshot.id) === pending && pending?.fingerprint === fingerprint) {
         pendingJobsRef.current.delete(snapshot.id);
         queuedFingerprintsRef.current.delete(snapshot.id);
@@ -529,7 +620,12 @@ function AppInner() {
       lastDurableFingerprintByRecord.current.set(snapshot.id, fingerprint);
       const latest = latestSnapshotRef.current;
       const latestFingerprint = latest?.id === snapshot.id ? recordFingerprint(latest) : null;
-      if (latestFingerprint === fingerprint && activeRecordIdRef.current === snapshot.id) {
+      if (
+        latestFingerprint === fingerprint &&
+        activeRecordIdRef.current === snapshot.id &&
+        !pendingPhotoMutationsRef.current.has(snapshot.id) &&
+        !pendingJobsRef.current.has(snapshot.id)
+      ) {
         markUnsaved(snapshot.id, false);
         return { durable: true, recordId: snapshot.id, fingerprint };
       }
@@ -582,7 +678,7 @@ function AppInner() {
           </div>
         </div>
         {view !== 'home' && <nav aria-label={t('nav.views')} className="max-w-xl mx-auto mt-3 grid grid-cols-3 gap-1 bg-section border border-steel rounded p-1">
-          <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>{t('nav.assess')}</ViewTab>
+          <ViewTab active={view === 'assess'} onClick={enterAssessment}>{t('nav.assess')}</ViewTab>
           <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>{t('nav.overview')}</ViewTab>
           <ViewTab active={view === 'records'} onClick={() => setView('records')}>{t('nav.records')}</ViewTab>
         </nav>}
@@ -590,7 +686,7 @@ function AppInner() {
 
       {view !== 'home' && <DeviceStatus online={online} durable={durable} unsaved={unsaved} mode={storageMode} warning={storageWarning} updateState={updateState} updateFailure={updateFailure} onApplyUpdate={handleApplyUpdate} />}
 
-      {view === 'home' ? <main id="main" className="flex-1 w-full"><Landing onStart={() => setView('assess')} onExplore={() => setView('overview')} /></main> : (
+      {view === 'home' ? <main id="main" className="flex-1 w-full"><Landing onStart={enterAssessment} onExplore={() => setView('overview')} /></main> : (
         <main id="main" className={`flex-1 w-full mx-auto px-5 py-8 ${view === 'overview' ? 'max-w-5xl' : 'max-w-xl'}`}>
           {view === 'overview' ? <Dashboard key="overview" streams={streams} historyByStream={historyByStream} historyWarningCount={historyWarningCount} onOpenStream={openStreamFromDashboard} /> : view === 'records' ? (
             <FieldRecords records={records} streams={streams} activeRecordId={assessmentRecord.id} unsavedIds={unsavedIds} onResume={resumeRecord} onExport={exportRecord} onDelete={deleteRecord} operationError={operationError} />
@@ -704,6 +800,31 @@ function downloadJson(payload, filename) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+function photoBlobForRecord(storedPhoto, record) {
+  const metadata = record?.assessment?.photo;
+  if (
+    !storedPhoto ||
+    !metadata ||
+    storedPhoto.id !== metadata.id ||
+    storedPhoto.recordId !== record.id ||
+    storedPhoto.name !== metadata.name ||
+    storedPhoto.type !== metadata.type ||
+    storedPhoto.size !== metadata.size ||
+    storedPhoto.lastModified !== metadata.lastModified ||
+    !blobMatchesPhoto(storedPhoto.blob, metadata)
+  ) return null;
+  return storedPhoto.blob;
+}
+
+function blobMatchesPhoto(blob, metadata) {
+  return Boolean(
+    blob instanceof Blob &&
+    metadata &&
+    blob.size === metadata.size &&
+    blob.type === metadata.type
+  );
 }
 
 function clearResumeQuery() {

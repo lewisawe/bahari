@@ -141,6 +141,7 @@ export const STRINGS = {
     'assist.error.photoUnavailable': 'This browser cannot decode the photo. Try another browser or device.',
     'assist.error.photoDecode': 'The photo could not be decoded. Choose another JPEG or PNG.',
     'assist.error.photoInvalid': 'Choose a valid JPEG or PNG photo.',
+    'assist.error.analysis': 'The photo could not be analyzed. Try again.',
 
     'dash.eyebrow': 'Researcher view',
     'dash.title': 'Catchment overview',
@@ -385,6 +386,7 @@ export const STRINGS = {
     'assist.error.photoUnavailable': 'Ce navigateur ne peut pas décoder la photo. Essayez un autre navigateur ou appareil.',
     'assist.error.photoDecode': 'La photo n’a pas pu être décodée. Choisissez un autre fichier JPEG ou PNG.',
     'assist.error.photoInvalid': 'Choisissez une photo JPEG ou PNG valide.',
+    'assist.error.analysis': 'La photo n’a pas pu être analysée. Réessayez.',
 
     'dash.eyebrow': 'Vue chercheur',
     'dash.title': 'Vue du bassin',

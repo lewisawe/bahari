@@ -56,8 +56,13 @@ export default function AssistPanel({
     if (!humanTaxonId || !photo?.id || !photoReady) return;
     setPhotoError(null);
     setPhase('thinking');
-    const accepted = await onAnalyze({ humanTaxonId, photoId: photo.id });
-    setPhase(accepted ? 'done' : 'idle');
+    try {
+      const accepted = await onAnalyze({ humanTaxonId, photoId: photo.id });
+      setPhase(accepted ? 'done' : 'idle');
+    } catch {
+      setPhotoError('assist.error.analysis');
+      setPhase('idle');
+    }
   }
 
   function handleTryAnother() {
