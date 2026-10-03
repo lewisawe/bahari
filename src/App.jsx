@@ -65,7 +65,7 @@ function AppInner() {
   const activePhotoBlobRef = useRef(null);
   const activeWeatherRequestRef = useRef(null);
   const weatherRequestIdRef = useRef(0);
-  const countTimerRef = useRef(null);
+  const pendingCountSaveRef = useRef(null);
   const pendingJobsRef = useRef(new Map());
   const pendingPhotoMutationsRef = useRef(new Map());
   const photoMutationIdRef = useRef(0);
@@ -154,7 +154,29 @@ function AppInner() {
     }
   };
 
+  // The trailing count save is bound to the record captured when it was scheduled, so an
+  // active-record transition can never redirect it through latestSnapshotRef. Returns the
+  // record id that was enqueued, or null when nothing was pending or it was cancelled.
+  const flushCountSave = useCallback(({ cancelFor = null } = {}) => {
+    const pending = pendingCountSaveRef.current;
+    if (!pending) return null;
+    clearTimeout(pending.timer);
+    pendingCountSaveRef.current = null;
+    if (cancelFor === pending.id) return null;
+    enqueueSave({ record: pending.record, reason: pending.reason });
+    return pending.id;
+  }, [enqueueSave]);
+
+  const settleRecordSave = useCallback(async (id) => {
+    while (pendingJobsRef.current.has(id) || runningIdsRef.current.has(id)) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  }, []);
+
   const stageSnapshot = useCallback((record, { save = 'immediate', photoChange, reason } = {}) => {
+    // A newer snapshot of the same record supersedes its trailing save; any other record's
+    // pending snapshot is enqueued before the active refs move on.
+    flushCountSave({ cancelFor: record.id });
     activeTrackedRef.current = true;
     latestSnapshotRef.current = record;
     assessmentRef.current = record.assessment;
@@ -162,16 +184,18 @@ function AppInner() {
     setAssessmentRecord(record);
     upsertRecord(record);
     markUnsaved(record.id, recordFingerprint(record) !== lastDurableFingerprintByRecord.current.get(record.id));
-    if (countTimerRef.current) {
-      clearTimeout(countTimerRef.current);
-      countTimerRef.current = null;
-    }
     if (save === 'debounced') {
-      countTimerRef.current = setTimeout(() => enqueueSave({ record: latestSnapshotRef.current, reason: reason || 'counts' }), 600);
+      const countReason = reason || 'counts';
+      const timer = setTimeout(() => {
+        if (pendingCountSaveRef.current?.timer !== timer) return;
+        pendingCountSaveRef.current = null;
+        enqueueSave({ record, reason: countReason });
+      }, 600);
+      pendingCountSaveRef.current = { timer, id: record.id, record, reason: countReason };
     } else if (save === 'immediate') {
       enqueueSave({ record, photoChange, reason });
     }
-  }, [enqueueSave, markUnsaved, upsertRecord]);
+  }, [enqueueSave, flushCountSave, markUnsaved, upsertRecord]);
 
   const refreshRecords = useCallback(async () => {
     if (!adapterRef.current) return;
@@ -187,6 +211,8 @@ function AppInner() {
 
   const resumeRecord = useCallback(async (id, { consumeQuery = false } = {}) => {
     if (!adapterRef.current) return false;
+    // Flush the outgoing record's trailing count save before this resume replaces the refs.
+    if (flushCountSave() === id) await settleRecordSave(id);
     try {
       const raw = await adapterRef.current.getRecord(id);
       const record = reconstructRecord(raw, streams, setStorageWarning);
@@ -230,7 +256,7 @@ function AppInner() {
       setOperationError(t('records.error.resume'));
       return false;
     }
-  }, [markUnsaved, storageMode, streams, t, upsertRecord]);
+  }, [flushCountSave, markUnsaved, settleRecordSave, storageMode, streams, t, upsertRecord]);
 
   useEffect(() => {
     let cancelled = false;
@@ -242,7 +268,7 @@ function AppInner() {
       setStorageMode(opened.mode);
       setStorageWarning(opened.warning);
       try {
-        const migration = await migrateLegacyHistory(opened.adapter, loadLegacyHistory(), streams);
+        const migration = await migrateLegacyHistory(opened.adapter, loadLegacyHistory, streams);
         if (migration.warnings.length) setStorageWarning(migration.warnings[0]);
       } catch (error) {
         setStorageWarning(error);
@@ -468,6 +494,9 @@ function AppInner() {
   }
 
   function startRecord(streamId, initialStepIndex = 0) {
+    // Restart, dashboard stream selection, and post-delete recovery all land here: the
+    // outgoing record's trailing count save must survive the ref swap below.
+    flushCountSave();
     activeWeatherRequestRef.current = null;
     activeAiRequestRef.current = null;
     const boundedStepIndex = Math.max(0, Math.min(STEPS.length - 1, initialStepIndex));
@@ -499,6 +528,9 @@ function AppInner() {
   async function deleteRecord(record) {
     const name = streams.find((item) => item.id === record.assessment.streamId)?.name || t('records.unknownStream');
     if (!window.confirm(t('records.confirmDelete', { name }))) return;
+    // Deleting a record must not resurrect its own trailing count save, but another
+    // record's pending snapshot still has to reach storage.
+    flushCountSave({ cancelFor: record.id });
     try {
       await adapterRef.current?.deleteRecord(record.id);
       setRecords((current) => current.filter((item) => item.id !== record.id));

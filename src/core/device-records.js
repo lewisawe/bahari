@@ -246,7 +246,11 @@ export async function buildRecordExport(record, { includePhoto = false, photoBlo
 
 export async function migrateLegacyHistory(adapter, legacyHistory, streams = []) {
   if (!adapter?.migrateLegacy) return { migrated: 0, warnings: [] };
-  const { records, warnings } = buildLegacyRecords(legacyHistory, streams);
+  // Read the persisted marker before the legacy payload is touched, so a completed
+  // migration never re-reads or re-transforms `bahari.history.v1`.
+  if (adapter.legacyMigrated && (await adapter.legacyMigrated())) return { migrated: 0, warnings: [] };
+  const history = typeof legacyHistory === 'function' ? legacyHistory() : legacyHistory;
+  const { records, warnings } = buildLegacyRecords(history, streams);
   const result = await adapter.migrateLegacy(records);
   return { migrated: result.migrated, warnings };
 }
@@ -279,6 +283,7 @@ export function createMemoryAdapter(initial = {}) {
       migrated = true;
       return { migrated: nextRecords.length, durable: false };
     },
+    async legacyMigrated() { return migrated; },
   };
 }
 
@@ -334,6 +339,7 @@ export function createLocalStorageAdapter(storage) {
       write(payload, 'migrate-legacy');
       return { migrated: records.length, durable: true };
     },
+    async legacyMigrated() { return read().metadata.legacyHistoryMigratedV1; },
   };
 }
 
@@ -376,6 +382,12 @@ function createIndexedDbAdapter(db) {
         await request(meta.put({ key: LEGACY_MIGRATION_KEY, value: true }));
         return { migrated: records.length, durable: true };
       }, 'migrate-legacy');
+    },
+    async legacyMigrated() {
+      return requestInTransaction(db, ['meta'], 'readonly', async ({ meta }) => {
+        const marker = await request(meta.get(LEGACY_MIGRATION_KEY));
+        return marker?.value === true;
+      }, 'read-legacy-marker');
     },
   };
 }
