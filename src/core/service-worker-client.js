@@ -50,7 +50,7 @@ async function register() {
   return { ...state };
 }
 
-export async function applyWaitingUpdate({ flushLatestSnapshot, activeRecordId } = {}) {
+export async function applyWaitingUpdate({ flushLatestSnapshot, activeRecordId, isLatestSnapshot } = {}) {
   const worker = state.waiting;
   if (!worker || typeof flushLatestSnapshot !== 'function') return false;
   setState({ applying: true, error: null });
@@ -62,7 +62,11 @@ export async function applyWaitingUpdate({ flushLatestSnapshot, activeRecordId }
     setState({ applying: false, updateReady: true });
     return false;
   }
-  if (!flushed?.durable || (activeRecordId && flushed.recordId !== activeRecordId)) {
+  if (
+    !flushed?.durable ||
+    (activeRecordId && (flushed.recordId !== activeRecordId || !flushed.fingerprint)) ||
+    (typeof isLatestSnapshot === 'function' && !isLatestSnapshot(flushed))
+  ) {
     setState({ applying: false, updateReady: true });
     return false;
   }

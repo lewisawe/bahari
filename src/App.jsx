@@ -488,15 +488,60 @@ function AppInner() {
   }, [assessmentRecord.id, enqueueSave, upsertRecord]);
 
   async function flushLatestSnapshot() {
-    const current = latestSnapshotRef.current;
-    if (!current) return { durable: true, recordId: null, fingerprint: null };
-    if (!adapterRef.current) throw new Error('storage unavailable');
-    const fingerprint = recordFingerprint(current);
-    const result = await adapterRef.current.putRecord(current);
-    if (!result.durable) return { durable: false, recordId: current.id, fingerprint };
-    lastDurableFingerprintByRecord.current.set(current.id, fingerprint);
-    markUnsaved(current.id, false);
-    return { durable: true, recordId: current.id, fingerprint };
+    while (true) {
+      const current = latestSnapshotRef.current;
+      if (!current) return { durable: true, recordId: null, fingerprint: null };
+      if (!adapterRef.current) throw new Error('storage unavailable');
+
+      while (runningIdsRef.current.has(current.id)) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      if (latestSnapshotRef.current?.id !== current.id) {
+        markUnsaved(current.id, true);
+        return { durable: false, recordId: current.id, fingerprint: null };
+      }
+
+      const snapshot = latestSnapshotRef.current;
+      const fingerprint = recordFingerprint(snapshot);
+      const pending = pendingJobsRef.current.get(snapshot.id);
+      const photoChange = pending?.fingerprint === fingerprint ? pending.photoChange : undefined;
+
+      runningIdsRef.current.add(snapshot.id);
+      inFlightFingerprintsRef.current.set(snapshot.id, fingerprint);
+      let result;
+      try {
+        result = await adapterRef.current.putRecord(snapshot, photoChange);
+      } finally {
+        runningIdsRef.current.delete(snapshot.id);
+        inFlightFingerprintsRef.current.delete(snapshot.id);
+      }
+
+      if (!result.durable) {
+        markUnsaved(snapshot.id, true);
+        return { durable: false, recordId: snapshot.id, fingerprint };
+      }
+
+      if (pendingJobsRef.current.get(snapshot.id) === pending && pending?.fingerprint === fingerprint) {
+        pendingJobsRef.current.delete(snapshot.id);
+        queuedFingerprintsRef.current.delete(snapshot.id);
+      }
+      lastDurableFingerprintByRecord.current.set(snapshot.id, fingerprint);
+      const latest = latestSnapshotRef.current;
+      const latestFingerprint = latest?.id === snapshot.id ? recordFingerprint(latest) : null;
+      if (latestFingerprint === fingerprint && activeRecordIdRef.current === snapshot.id) {
+        markUnsaved(snapshot.id, false);
+        return { durable: true, recordId: snapshot.id, fingerprint };
+      }
+
+      markUnsaved(snapshot.id, true);
+      if (!latest || latest.id !== snapshot.id || activeRecordIdRef.current !== snapshot.id) {
+        if (pendingJobsRef.current.has(snapshot.id)) {
+          queueMicrotask(() => drainSaveRef.current?.(snapshot.id));
+        }
+        return { durable: false, recordId: snapshot.id, fingerprint };
+      }
+    }
   }
 
   async function handleApplyUpdate() {
@@ -504,6 +549,15 @@ function AppInner() {
     const applied = await applyWaitingUpdate({
       flushLatestSnapshot,
       activeRecordId: activeRecordIdRef.current,
+      isLatestSnapshot: ({ recordId, fingerprint }) => {
+        const latest = latestSnapshotRef.current;
+        return Boolean(
+          latest &&
+          latest.id === recordId &&
+          activeRecordIdRef.current === recordId &&
+          recordFingerprint(latest) === fingerprint
+        );
+      },
     });
     if (!applied) setUpdateFailure(true);
   }
@@ -592,7 +646,7 @@ function prepareHistory(streams, records) {
         return {
           ...entry,
           id: record.assessment.id,
-          sourceOrder: sourceSeedRows.length + localIndex,
+          sourceOrder: seedRows.length + localIndex,
         };
       })
       .filter(Boolean);

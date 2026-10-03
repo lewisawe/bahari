@@ -526,13 +526,25 @@ function normalizeAiReview(value, assessment) {
   if (!Number.isFinite(model.confidence) || model.confidence < 0 || model.confidence > 1 || !validIso(model.analyzedAt)) return null;
   if (!['nova-vision', 'stub', 'stub-fallback'].includes(model.provider)) return null;
   if (!Array.isArray(model.cues) || model.cues.length > 8 || model.cues.some((cue) => typeof cue !== 'string' || cue.length > 200)) return null;
-  if (!Array.isArray(model.alternatives)) return null;
+  if (!Array.isArray(model.alternatives) || model.alternatives.length > 5) return null;
+  if (model.alternatives.some((alternative) =>
+    !isObject(alternative) ||
+    !getTaxon(alternative.taxonId) ||
+    typeof alternative.confidence !== 'number' ||
+    !Number.isFinite(alternative.confidence)
+  )) return null;
   const raw = { taxonId: model.taxonId, confidence: model.confidence, reasoning: model.cues, alternatives: model.alternatives, provider: model.provider };
   const policy = applyConfidencePolicy(raw, model.provider);
   if (policy.status !== model.policyStatus) return null;
   const outcome = policy.status === 'defer' ? 'defer' : policy.taxonId === humanId ? 'agreement' : 'disagreement';
   if (outcome !== value.outcome) return null;
-  return cloneJson(value);
+  return cloneJson({
+    ...value,
+    model: {
+      ...model,
+      alternatives: policy.alternatives,
+    },
+  });
 }
 
 function durationAtCompletion(startedAt, completedAt) {

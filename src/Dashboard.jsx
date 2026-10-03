@@ -48,7 +48,7 @@ export default function Dashboard({
   const recheckGroups = groupRecordsByStream(recheckRecords, streams);
   const selectedStream = streams.find((stream) => stream.id === selectedStreamId) ?? null;
   const selectedActiveRecord = selectedStreamId
-    ? activeRecords.find((record) => record.streamId === selectedStreamId) ?? null
+    ? priorityRows.find((record) => record.streamId === selectedStreamId) ?? null
     : null;
   const mapStreams = streams.map((stream) => ({
     ...stream,
