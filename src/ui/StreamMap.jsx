@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { markerColor, fitView } from '../core/map-utils.js';
+import { prefersReducedMotion } from './motion.js';
 
 // Interactive stream map (plain Leaflet + OpenStreetMap tiles, free/no key).
 // Markers are colored by each stream's latest health class; clicking selects.
 // The map only mounts in a real browser with Leaflet available; callers keep a
 // list fallback for no-JS / offline / test environments.
+
+// Zoom used when flying to a single selected stream — close enough to read as
+// "zoomed into the stream," not a tiny pan (audit asks for ~12–14).
+const SELECT_ZOOM = 13;
 
 export default function StreamMap({
   streams = [],
@@ -18,6 +23,8 @@ export default function StreamMap({
   const mapRef = useRef(null);
   const markersRef = useRef(new Map());
   const LRef = useRef(null);
+  const readyRef = useRef(false); // map created + initial framing done
+  const lastFlownRef = useRef(undefined); // last selectedId we flew to
 
   // init map once
   useEffect(() => {
@@ -55,10 +62,21 @@ export default function StreamMap({
         const b = L.latLngBounds(streams.map((s) => [s.lat, s.lon]));
         map.fitBounds(b.pad(0.2));
       }
+      // Initial framing is done. From here on, a selectedId change should fly
+      // the viewport to that stream (handled by the selection effect below).
+      // Seed lastFlown with the current selection so we do NOT yank the view
+      // on first mount when fitAll is intentionally framing everything.
+      readyRef.current = true;
+      lastFlownRef.current = selectedId;
+      // If the map opened focused on a single stream (not fitAll), make sure
+      // its marker is highlighted/open from the start.
+      if (!fitAll) openSelectedTooltip();
     }
     init();
     return () => {
       cancelled = true;
+      readyRef.current = false;
+      lastFlownRef.current = undefined;
       if (mapRef.current) {
         mapRef.current.remove();
         mapRef.current = null;
@@ -72,6 +90,55 @@ export default function StreamMap({
     renderMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streams, selectedId, historyByStream]);
+
+  // Fly/pan+zoom to the selected stream whenever the selection changes. This is
+  // the direct-manipulation feedback the user reported missing: selecting a
+  // stream must move the view it refers to. Independent of marker rebuild.
+  useEffect(() => {
+    flyToSelected();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
+
+  function flyToSelected() {
+    const map = mapRef.current;
+    // Guard: map not yet initialized, or still doing initial framing.
+    if (!map || !readyRef.current) return;
+    // Guard: no selection, or selection unchanged since we last flew.
+    if (selectedId == null) {
+      lastFlownRef.current = selectedId;
+      return;
+    }
+    if (selectedId === lastFlownRef.current) return;
+    const s = streams.find((x) => x.id === selectedId);
+    // Guard: unknown stream or missing/invalid coordinates.
+    if (!s || typeof s.lat !== 'number' || typeof s.lon !== 'number') return;
+
+    lastFlownRef.current = selectedId;
+    const target = [s.lat, s.lon];
+    const zoom = Math.max(map.getZoom() || 0, SELECT_ZOOM);
+    // Reduced motion: snap without an animated flight.
+    if (prefersReducedMotion()) {
+      map.setView(target, zoom, { animate: false });
+    } else if (typeof map.flyTo === 'function') {
+      map.flyTo(target, zoom, { duration: 0.8 });
+    } else {
+      map.setView(target, zoom);
+    }
+    openSelectedTooltip();
+  }
+
+  // Open the tooltip on the currently-selected marker (if any) so the flown-to
+  // stream is clearly labelled. No-op if the marker/map is absent.
+  function openSelectedTooltip() {
+    const marker = selectedId != null ? markersRef.current.get(selectedId) : null;
+    if (marker && typeof marker.openTooltip === 'function') {
+      try {
+        marker.openTooltip();
+      } catch {
+        /* tooltip may not be bound yet; ignore */
+      }
+    }
+  }
 
   function renderMarkers() {
     const L = LRef.current;
@@ -102,7 +169,7 @@ export default function StreamMap({
   return (
     <div
       ref={elRef}
-      role="application"
+      role="region"
       aria-label="Map of stream monitoring points"
       className="w-full rounded border border-steel overflow-hidden bg-section"
       style={{ height }}

@@ -3,6 +3,7 @@ import { scoreAssessment } from '../core/biotic-index.js';
 import { GhostButton, PrimaryButton, Eyebrow, healthColor } from '../ui/primitives.jsx';
 import { useT } from '../i18n/I18n.jsx';
 import ReliabilityCard from '../ui/ReliabilityCard.jsx';
+import ScoreRing from '../ui/ScoreRing.jsx';
 
 export default function StepResult({ counts, streamName, submission, onBack, onNext, onRestart }) {
   const { t } = useT();
@@ -22,23 +23,24 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
 
   return (
     <div className="space-y-8">
-      <div>
+      <div className="anim-fade-up">
         <Eyebrow>{t('step.result.eyebrow')}</Eyebrow>
         <h2 className="text-2xl font-semibold tracking-tight mt-2">{t('step.result.title')}</h2>
         {streamName && <p className="text-sm text-ash mt-1.5">{streamName}</p>}
       </div>
 
-      {/* Headline result — flat card, health color carried by the numerals and dot */}
-      <div className="rounded bg-card border border-steel p-6">
+      {/* Beat A — the score reveal. The one sanctioned glow in the system:
+          a health-colored aura behind the ring, the ring draws in, and the
+          numeral counts up. Reduced motion lands on the final state. */}
+      <div className="rounded bg-card border border-steel p-6 anim-fade-up">
         <div className="flex items-center gap-5">
-          <div
-            className="w-20 h-20 rounded-full grid place-items-center border-2 shrink-0"
-            style={{ borderColor: color }}
-          >
-            <span className="text-3xl font-semibold tabular-nums" style={{ color }}>
-              {result.score}
-            </span>
-          </div>
+          <ScoreRing
+            score={result.score}
+            max={10}
+            color={color}
+            size={92}
+            label={`Health score ${result.score} out of 10`}
+          />
           <div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} aria-hidden="true" />
@@ -56,7 +58,7 @@ export default function StepResult({ counts, streamName, submission, onBack, onN
         <h3 className="text-sm font-medium text-snow mb-2">
           What drove this ({result.richness} group{result.richness === 1 ? '' : 's'})
         </h3>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 anim-stagger">
           {[...result.contributions]
             .sort((a, b) => b.sensitivity - a.sensitivity)
             .map((f) => (

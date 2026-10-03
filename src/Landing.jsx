@@ -16,7 +16,7 @@ export default function Landing({ onStart, onExplore }) {
     <div>
       {/* Hero */}
       <section className="grid-motif border-b border-steel">
-        <div className="max-w-3xl mx-auto px-6 py-24 sm:py-32">
+        <div className="max-w-3xl mx-auto px-6 py-24 sm:py-32 anim-stagger">
           <p className="eyebrow">{t('landing.eyebrow')}</p>
           <h1 className="mt-4 text-4xl sm:text-6xl font-semibold tracking-tightest leading-[1.05] text-snow">
             {t('landing.h1a')}{' '}

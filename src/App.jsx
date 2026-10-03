@@ -168,12 +168,13 @@ function AppInner() {
         <main id="main" className="flex-1 w-full max-w-xl mx-auto px-5 py-8">
           {view === 'overview' ? (
           <Dashboard
+            key="overview"
             streams={streams}
             historyByStream={historyByStream}
             onOpenStream={openStreamFromDashboard}
           />
         ) : (
-          <>
+          <div key={`step-${stepIndex}`} className="anim-fade-up">
             {step.key === 'stream' && (
               <StepStream
                 streamId={assessment.streamId}
@@ -225,7 +226,7 @@ function AppInner() {
                 onRestart={restart}
               />
             )}
-          </>
+          </div>
         )}
         </main>
       )}

@@ -105,7 +105,9 @@ function TaxonCard({ taxon, count, onDec, onInc }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-medium text-snow text-sm">{taxon.commonName}</span>
-            <TierBadge tier={taxon.tier} />
+            <span key={active ? 'on' : 'off'} className={active ? 'anim-pop inline-flex' : 'inline-flex'}>
+              <TierBadge tier={taxon.tier} />
+            </span>
           </div>
           <button
             onClick={() => setOpen((o) => !o)}
@@ -136,17 +138,19 @@ function Counter({ count, onDec, onInc, label }) {
         onClick={onDec}
         disabled={count === 0}
         aria-label={`One fewer ${label}`}
-        className="w-9 h-9 rounded border border-steel bg-ink text-ash text-xl grid place-items-center disabled:opacity-30 hover:border-graphite transition-colors"
+        className="w-9 h-9 rounded border border-steel bg-ink text-ash text-xl grid place-items-center disabled:opacity-30 hover:border-graphite active:scale-90 transition-[border-color,transform]"
       >
         −
       </button>
-      <span className="w-6 text-center font-medium tabular-nums text-snow" aria-live="polite">
-        {count}
+      <span className="w-6 text-center" aria-live="polite">
+        <span key={count} className="inline-block font-medium tabular-nums text-snow anim-bump">
+          {count}
+        </span>
       </span>
       <button
         onClick={onInc}
         aria-label={`One more ${label}`}
-        className="w-9 h-9 rounded bg-snow text-ink text-xl grid place-items-center hover:bg-white/90 transition-colors"
+        className="w-9 h-9 rounded bg-snow text-ink text-xl grid place-items-center hover:bg-white/90 active:scale-90 transition-[background-color,transform]"
       >
         +
       </button>

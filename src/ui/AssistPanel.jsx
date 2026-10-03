@@ -1,15 +1,22 @@
 import React, { useState } from 'react';
 import { identifyTaxon, getProviderName } from '../core/ai-assist.js';
 import { getTaxon } from '../core/taxa.js';
+import { useT } from '../i18n/I18n.jsx';
+import ConfidenceMeter from './ConfidenceMeter.jsx';
 
-// Explainable, human-in-the-loop AI assist panel.
+// Explainable, human-in-the-loop AI assist panel (Beat C).
 //
 // The human always decides: the AI suggests + explains + states confidence, and
 // on low confidence it refuses to suggest and asks the person to choose. Every
 // path ends in the citizen confirming (which records a count) or dismissing.
 // Nothing is auto-recorded by the AI.
+//
+// All user-facing copy flows through i18n (EN + FR). The confidence is the
+// focal element: a bold animated meter in the band color with the band label
+// as the headline — the responsible-AI story, staged.
 
 export default function AssistPanel({ onConfirm, onClose, presetHint }) {
+  const { t } = useT();
   const [phase, setPhase] = useState('idle'); // idle | thinking | done
   const [result, setResult] = useState(null);
   const [photoName, setPhotoName] = useState(null);
@@ -46,28 +53,30 @@ export default function AssistPanel({ onConfirm, onClose, presetHint }) {
   }
 
   return (
-    <div className="rounded bg-card border border-accent/40 p-4 space-y-3">
+    <div className="rounded bg-card border border-accent/40 p-4 space-y-3 anim-fade-up">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-snow">AI identification help</span>
+          <span className="text-sm font-medium text-snow">{t('assist.title')}</span>
           <span className="font-mono text-[10px] uppercase tracking-code bg-ink text-ash px-1.5 py-0.5 rounded-tag border border-steel">
-            assist · not the decision
+            {t('assist.tag')}
           </span>
         </div>
         <button onClick={onClose} className="text-ash text-sm hover:text-snow">
-          Close
+          {t('assist.close')}
         </button>
       </div>
 
       <p className="text-xs text-ash">
-        Add a photo of one creature and the AI will suggest what it might be, show
-        its reasoning, and how sure it is. <b className="text-snow">You</b> confirm
-        the final answer.
+        {t('assist.intro', { you: '' })
+          .split('{you}')
+          .flatMap((seg, i) =>
+            i === 0 ? [seg] : [<b key="you" className="text-snow">{t('assist.you')}</b>, seg],
+          )}
       </p>
 
       {/* photo input */}
       <label className="block">
-        <span className="sr-only">Photo of a creature</span>
+        <span className="sr-only">{t('assist.photoLabel')}</span>
         <input
           type="file"
           accept="image/*"
@@ -75,20 +84,20 @@ export default function AssistPanel({ onConfirm, onClose, presetHint }) {
           className="block w-full text-xs text-ash file:mr-3 file:rounded file:border file:border-steel file:bg-section file:px-3 file:py-2 file:text-snow file:font-medium"
         />
       </label>
-      {photoName && <div className="font-mono text-[11px] text-fog">Selected: {photoName}</div>}
+      {photoName && (
+        <div className="font-mono text-[11px] text-fog">{t('assist.selected', { name: photoName })}</div>
+      )}
 
       {phase === 'idle' && (
         <button
           onClick={() => runAssist(presetHint)}
-          className="w-full rounded bg-snow text-ink text-sm font-medium py-2.5 hover:bg-white/90 transition-colors"
+          className="w-full rounded bg-snow text-ink text-sm font-medium py-2.5 hover:bg-white/90 active:scale-[0.98] transition-[background-color,transform]"
         >
-          Ask the AI
+          {t('assist.ask')}
         </button>
       )}
 
-      {phase === 'thinking' && (
-        <div className="text-sm text-ash py-2 animate-pulse">Looking at the photo…</div>
-      )}
+      {phase === 'thinking' && <ScanningState label={t('assist.scanning')} />}
 
       {phase === 'done' && result && (
         <AssistResult
@@ -99,44 +108,55 @@ export default function AssistPanel({ onConfirm, onClose, presetHint }) {
       )}
 
       <div className="font-mono text-[10px] text-fog pt-2 border-t border-steel">
-        Engine: {getProviderName()} · a specialist model can be swapped in without
-        changing this screen.
+        {t('assist.engine', { name: getProviderName() })}
+      </div>
+    </div>
+  );
+}
+
+// The "AI is looking at the photo" beat: a framed placeholder with a scanning
+// sweep so the AI visibly feels like it's examining the image. The sweep is
+// decorative and stops under reduced motion (CSS .scan-frame guard). The text
+// remains for screen readers / reduced-motion users.
+function ScanningState({ label }) {
+  return (
+    <div className="scan-frame rounded border border-accent/40 bg-section grid place-items-center h-24">
+      <div className="flex items-center gap-2 text-sm text-ash" aria-live="polite">
+        <span className="w-2 h-2 rounded-full bg-accent anim-pop" aria-hidden="true" />
+        {label}
       </div>
     </div>
   );
 }
 
 function AssistResult({ result, onConfirm, onRetry }) {
+  const { t } = useT();
   const suggested = result.taxonId ? getTaxon(result.taxonId) : null;
   const pct = Math.round(result.confidence * 100);
 
+  // Band color + label — the honest "cannot tell" is a strength, so it is
+  // presented with the same confidence as a positive result, not as an error.
   const band =
     result.status === 'suggested'
-      ? { c: '#3ecf8e', label: 'Fairly confident' }
+      ? { c: '#3ecf8e', label: t('assist.band.suggested') }
       : result.status === 'review'
-        ? { c: '#f5c451', label: 'Not sure, please verify' }
-        : { c: '#ff6b6b', label: 'Cannot tell, you decide' };
+        ? { c: '#f5c451', label: t('assist.band.review') }
+        : { c: '#ff6b6b', label: t('assist.band.defer') };
 
   return (
-    <div className="space-y-3">
-      {/* confidence + status */}
-      <div className="flex-1">
-        <div className="flex items-center justify-between text-xs mb-1">
-          <span className="font-medium" style={{ color: band.c }}>
-            {band.label}
-          </span>
-          <span className="font-mono text-ash tabular-nums">{pct}% sure</span>
-        </div>
-        <div className="h-1.5 rounded-full bg-steel overflow-hidden">
-          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: band.c }} />
-        </div>
-      </div>
+    <div className="space-y-3 anim-fade-up">
+      {/* confidence — the focal element: bold meter + big pct + band headline */}
+      <ConfidenceMeter pct={pct} color={band.c} label={band.label} unit={t('assist.confidence')} />
 
       {/* the suggestion (or explicit deferral) */}
       {result.status !== 'defer' && suggested ? (
         <div className="rounded bg-section border border-steel p-3">
           <div className="text-sm text-snow">
-            Might be a <b>{suggested.commonName}</b>
+            {t('assist.mightBe', { name: '' })
+              .split('{name}')
+              .flatMap((seg, i) =>
+                i === 0 ? [seg] : [<b key="n">{suggested.commonName}</b>, seg],
+              )}
           </div>
           <ul className="mt-1.5 space-y-0.5">
             {result.reasoning.map((r, i) => (
@@ -148,31 +168,29 @@ function AssistResult({ result, onConfirm, onRetry }) {
           </ul>
           {result.alternatives?.length > 0 && (
             <div className="text-[11px] text-fog mt-2">
-              Could also be:{' '}
-              {result.alternatives
-                .map((a) => getTaxon(a.taxonId)?.commonName)
-                .filter(Boolean)
-                .join(', ')}
+              {t('assist.couldAlsoBe', {
+                names: result.alternatives
+                  .map((a) => getTaxon(a.taxonId)?.commonName)
+                  .filter(Boolean)
+                  .join(', '),
+              })}
             </div>
           )}
         </div>
       ) : (
-        <div className="rounded bg-section border border-health-bad/40 p-3">
-          <div className="text-sm font-medium text-health-bad">
-            The AI is not confident enough.
+        <div className="rounded bg-section border p-3" style={{ borderColor: `${band.c}66` }}>
+          <div className="text-sm font-medium" style={{ color: band.c }}>
+            {t('assist.notConfident')}
           </div>
           <ul className="mt-1.5 space-y-0.5">
             {result.reasoning.map((r, i) => (
               <li key={i} className="text-xs text-ash flex gap-1.5">
-                <span className="text-health-bad">•</span>
+                <span style={{ color: band.c }}>•</span>
                 <span>{r}</span>
               </li>
             ))}
           </ul>
-          <p className="text-xs text-ash mt-2">
-            Please decide yourself using the recognition tips, or leave it out if
-            unsure.
-          </p>
+          <p className="text-xs text-ash mt-2">{t('assist.deferHelp')}</p>
         </div>
       )}
 
@@ -181,23 +199,23 @@ function AssistResult({ result, onConfirm, onRetry }) {
         {result.status !== 'defer' && suggested ? (
           <button
             onClick={() => onConfirm(suggested.id)}
-            className="rounded bg-snow text-ink text-sm font-medium py-2.5 hover:bg-white/90 transition-colors"
+            className="rounded bg-snow text-ink text-sm font-medium py-2.5 hover:bg-white/90 active:scale-[0.98] transition-[background-color,transform]"
           >
-            Yes, add {suggested.commonName}
+            {t('assist.addSuggested', { name: suggested.commonName })}
           </button>
         ) : (
           <button
             onClick={onRetry}
-            className="rounded bg-card border border-steel text-snow text-sm font-medium py-2.5 hover:border-graphite transition-colors"
+            className="rounded bg-card border border-steel text-snow text-sm font-medium py-2.5 hover:border-graphite active:scale-[0.98] transition-[border-color,transform]"
           >
-            Try another photo
+            {t('assist.tryAnother')}
           </button>
         )}
         <button
           onClick={onRetry}
-          className="rounded border border-graphite bg-transparent text-snow text-sm font-medium py-2.5 hover:bg-card transition-colors"
+          className="rounded border border-graphite bg-transparent text-snow text-sm font-medium py-2.5 hover:bg-card active:scale-[0.98] transition-[background-color,transform]"
         >
-          {result.status !== 'defer' ? 'No / not sure' : 'OK'}
+          {result.status !== 'defer' ? t('assist.decline') : t('assist.ok')}
         </button>
       </div>
     </div>

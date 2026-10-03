@@ -22,9 +22,9 @@ export function PrimaryButton({ children, disabled, onClick, className = '', typ
       onClick={onClick}
       disabled={disabled}
       className={
-        'w-full rounded px-4 py-2.5 text-sm font-medium transition-colors ' +
-        'bg-snow text-ink hover:bg-white/90 active:bg-white/80 ' +
-        'disabled:bg-card disabled:text-fog disabled:cursor-not-allowed ' +
+        'w-full rounded px-4 py-2.5 text-sm font-medium transition-[background-color,transform] ' +
+        'bg-snow text-ink hover:bg-white/90 active:bg-white/80 active:scale-[0.98] ' +
+        'disabled:bg-card disabled:text-fog disabled:cursor-not-allowed disabled:active:scale-100 ' +
         className
       }
     >
@@ -39,8 +39,8 @@ export function GhostButton({ children, onClick, className = '', type = 'button'
       type={type}
       onClick={onClick}
       className={
-        'rounded px-4 py-2.5 text-sm font-medium transition-colors ' +
-        'bg-transparent text-snow border border-graphite hover:bg-card ' +
+        'rounded px-4 py-2.5 text-sm font-medium transition-[background-color,border-color,transform] ' +
+        'bg-transparent text-snow border border-graphite hover:bg-card active:scale-[0.98] ' +
         className
       }
     >

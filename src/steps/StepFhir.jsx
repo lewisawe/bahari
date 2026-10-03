@@ -1,7 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { buildBundle, validateBundle } from '../core/fhir.js';
 import { GhostButton, PrimaryButton, Eyebrow } from '../ui/primitives.jsx';
+import { HEALTH_COLORS } from '../core/health-colors.js';
 import { useT } from '../i18n/I18n.jsx';
+
+const GOOD = HEALTH_COLORS.good; // '#3ecf8e'
+const BAD = HEALTH_COLORS.very_poor; // '#ff6b6b'
 
 export default function StepFhir({ stream, counts, submission, context, onBack, onRestart }) {
   const { t } = useT();
@@ -35,7 +39,7 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
 
   return (
     <div className="space-y-6">
-      <div>
+      <div className="anim-fade-up">
         <Eyebrow>{t('step.fhir.eyebrow')}</Eyebrow>
         <h2 className="text-2xl font-semibold tracking-tight mt-2">{t('step.fhir.title')}</h2>
         <p className="text-sm text-ash mt-1.5 leading-relaxed">
@@ -45,36 +49,58 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
         </p>
       </div>
 
-      {/* validity badge */}
-      <div className="rounded bg-card border border-steel p-4">
-        <div className="flex items-center gap-2">
+      {/* Beat B — the "Valid FHIR R4 Bundle" hero. This standards-compliance
+          claim is Bahari's biggest credibility differentiator, so the valid
+          state is staged as the hero of the screen: green-tinted surface, a
+          drawn-in checkmark, and a proof caption. The invalid branch stays
+          sober (no celebration). */}
+      {validation.valid ? (
+        <div
+          className="relative rounded border p-6 anim-fade-up overflow-hidden"
+          style={{ borderColor: `${GOOD}66`, background: `${GOOD}14` }}
+        >
+          {/* soft green aura — the sanctioned glow, scoped to the signature beat */}
           <span
-            className="w-6 h-6 rounded-full grid place-items-center text-ink text-sm font-bold"
-            style={{ background: validation.valid ? '#3ecf8e' : '#ff6b6b' }}
-          >
-            {validation.valid ? '\u2713' : '\u2715'}
-          </span>
-          <span className="font-medium text-snow">
-            {validation.valid ? t('step.fhir.valid') : 'Bundle has issues'}
-          </span>
+            aria-hidden="true"
+            className="anim-glow pointer-events-none absolute -top-10 -left-6 w-40 h-40 rounded-full"
+            style={{ background: `radial-gradient(circle, ${GOOD}3d 0%, transparent 70%)` }}
+          />
+          <div className="relative flex items-center gap-4">
+            <CheckSeal color={GOOD} />
+            <div>
+              <div className="text-xl font-semibold" style={{ color: GOOD }}>
+                {t('step.fhir.valid')}
+              </div>
+              <p className="font-mono text-[11px] text-ash mt-1.5">
+                {t('step.fhir.verifiedCaption')}{' '}
+                <span className="text-fog">{t('step.fhir.runValidate', { cmd: 'npm run validate:fhir' })}</span>
+              </p>
+            </div>
+          </div>
         </div>
-        {!validation.valid && (
+      ) : (
+        <div className="rounded bg-card border p-4" style={{ borderColor: `${BAD}66` }}>
+          <div className="flex items-center gap-2">
+            <span
+              className="w-6 h-6 rounded-full grid place-items-center text-ink text-sm font-bold"
+              style={{ background: BAD }}
+            >
+              {'\u2715'}
+            </span>
+            <span className="font-medium text-snow">{t('step.fhir.invalid')}</span>
+          </div>
           <ul className="mt-2 text-xs text-health-bad list-disc pl-5">
             {validation.errors.map((e, i) => (
               <li key={i}>{e}</li>
             ))}
           </ul>
-        )}
-        <p className="font-mono text-[10px] text-fog mt-2">
-          Also validated against the HAPI FHIR R4 server ($validate): 0 errors.
-          Run <span className="text-ash">npm run validate:fhir</span>.
-        </p>
-      </div>
+        </div>
+      )}
 
       {/* what's inside, in plain language */}
       <div className="rounded bg-section border border-steel p-4">
         <h3 className="text-sm font-medium text-snow mb-2">What's in this record</h3>
-        <ul className="space-y-1.5 text-sm">
+        <ul className="space-y-1.5 text-sm anim-stagger">
           <ResourceLine
             present={resourceList.includes('Location')}
             title="Location"
@@ -134,8 +160,10 @@ function ResourceLine({ present, title, desc }) {
   return (
     <li className="flex items-start gap-2">
       <span
-        className="shrink-0 mt-0.5 w-4 h-4 rounded-full grid place-items-center text-ink text-[10px] font-bold"
-        style={{ background: present ? '#6798ff' : '#454545' }}
+        className={
+          'shrink-0 mt-0.5 w-4 h-4 rounded-full grid place-items-center text-ink text-[10px] font-bold ' +
+          (present ? 'bg-accent anim-pop' : 'bg-graphite')
+        }
       >
         {present ? '\u2713' : '\u2013'}
       </span>
@@ -144,5 +172,31 @@ function ResourceLine({ present, title, desc }) {
         <span className="text-ash">, {desc}</span>
       </div>
     </li>
+  );
+}
+
+// Hero check-seal for the valid FHIR badge. The checkmark path draws itself in
+// (anim-check-draw), inside a scale-popping ring. Reduced motion lands on the
+// finished mark (CSS reduced-motion guard forces stroke-dashoffset: 0).
+function CheckSeal({ color }) {
+  return (
+    <span
+      className="anim-pop relative shrink-0 grid place-items-center w-14 h-14 rounded-full"
+      style={{ background: `${color}26`, border: `2px solid ${color}` }}
+      aria-hidden="true"
+    >
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+        <path
+          className="anim-check-draw"
+          d="M4 12.5 L10 18 L20 6"
+          stroke={color}
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeDasharray="30"
+          style={{ '--check-length': 30 }}
+        />
+      </svg>
+    </span>
   );
 }

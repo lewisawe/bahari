@@ -1,5 +1,6 @@
 import React from 'react';
 import { scoreReliability } from '../core/reliability.js';
+import ScoreRing from './ScoreRing.jsx';
 
 // Shows how trustworthy this submission is (separate from ecological health).
 // This is the piece that lets researchers filter/weight citizen data.
@@ -13,7 +14,7 @@ export default function ReliabilityCard({ submission }) {
   const color = BAND_COLOR[r.band] || '#a7a7a7';
 
   return (
-    <div className="rounded bg-section border border-steel p-4">
+    <div className="rounded bg-section border border-steel p-4 anim-fade-up">
       <div className="flex items-center justify-between mb-3">
         <div>
           <div className="flex items-center gap-2">
@@ -24,15 +25,17 @@ export default function ReliabilityCard({ submission }) {
             How much a researcher can trust this record, separate from stream health.
           </p>
         </div>
-        <div
-          className="shrink-0 w-14 h-14 rounded-full grid place-items-center border-2"
-          style={{ borderColor: color }}
-          title={`${b.label} reliability`}
-        >
-          <span className="text-lg font-semibold tabular-nums" style={{ color }}>
-            {r.score}
-          </span>
-        </div>
+        {/* Subordinate ring: shares the Beat A reveal, but smaller and without
+            the signature glow so the result (Beat A) stays the biggest moment. */}
+        <ScoreRing
+          score={r.score}
+          max={100}
+          color={color}
+          size={56}
+          stroke={4}
+          glow={false}
+          label={`${b.label} reliability, ${r.score} out of 100`}
+        />
       </div>
 
       <div className="text-sm font-medium mb-1" style={{ color }}>
@@ -41,7 +44,7 @@ export default function ReliabilityCard({ submission }) {
       <p className="text-xs text-ash mb-3">{b.blurb}</p>
 
       {/* per-check breakdown — fully transparent */}
-      <ul className="space-y-1.5">
+      <ul className="space-y-1.5 anim-stagger">
         {r.checks.map((c) => (
           <li key={c.id} className="flex items-start gap-2 text-xs">
             <StatusDot status={c.status} />

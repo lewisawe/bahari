@@ -53,3 +53,252 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ----------------------------------------------------------------------------
+   Motion layer — shared keyframes for the three signature beats + the credible
+   baseline reveals. Single source so beats and reveals stay consistent.
+
+   IMPORTANT: the global prefers-reduced-motion block above zeroes every
+   animation/transition duration, so each animation's FINAL keyframe (100%)
+   must equal the correct resting UI. Reduced-motion users jump straight to
+   that resting state; they never see a frozen 0% frame. Every helper class
+   below ends at the visible/final state and uses `animation-fill-mode: both`
+   so the start state only applies while the (near-zero) animation runs.
+   -------------------------------------------------------------------------- */
+
+@keyframes bahari-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bahari-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bahari-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Count bump — a tiny tactile pulse on the primary count gesture. */
+@keyframes bahari-bump {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Ring draw — stroke-dashoffset sweep for the score / reliability rings. The
+   element must set its own --ring-circumference; final state is fully drawn. */
+@keyframes bahari-ring-draw {
+  from {
+    stroke-dashoffset: var(--ring-circumference, 251);
+  }
+  to {
+    stroke-dashoffset: var(--ring-offset, 0);
+  }
+}
+
+/* Checkmark draw — SVG path stroke reveal for the FHIR valid badge. */
+@keyframes bahari-check-draw {
+  from {
+    stroke-dashoffset: var(--check-length, 48);
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Meter fill — the confidence bar / distribution bars grow from 0 to --meter. */
+@keyframes bahari-meter-fill {
+  from {
+    width: 0;
+  }
+  to {
+    width: var(--meter, 100%);
+  }
+}
+
+/* Shimmer — skeleton loading sweep. */
+@keyframes bahari-shimmer {
+  from {
+    background-position: -150% 0;
+  }
+  to {
+    background-position: 150% 0;
+  }
+}
+
+/* Signature glow pulse — the single sanctioned exception to the no-shadows
+   rule, scoped to Beat A (score) / Beat B (valid badge). Gentle, two cycles. */
+@keyframes bahari-glow {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+}
+
+/* --- utility classes --- */
+
+.anim-fade-up {
+  animation: bahari-fade-up 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.anim-fade-in {
+  animation: bahari-fade-in 0.3s ease-out both;
+}
+
+.anim-pop {
+  animation: bahari-pop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.2) both;
+}
+
+.anim-bump {
+  animation: bahari-bump 0.32s cubic-bezier(0.2, 0.8, 0.3, 1.3);
+}
+
+.anim-glow {
+  animation: bahari-glow 1.1s ease-out both;
+}
+
+/* Stagger: children fade-up in sequence. Depth kept shallow (8). */
+.anim-stagger > * {
+  animation: bahari-fade-up 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.anim-stagger > *:nth-child(1) { animation-delay: 0.04s; }
+.anim-stagger > *:nth-child(2) { animation-delay: 0.09s; }
+.anim-stagger > *:nth-child(3) { animation-delay: 0.14s; }
+.anim-stagger > *:nth-child(4) { animation-delay: 0.19s; }
+.anim-stagger > *:nth-child(5) { animation-delay: 0.24s; }
+.anim-stagger > *:nth-child(6) { animation-delay: 0.29s; }
+.anim-stagger > *:nth-child(7) { animation-delay: 0.34s; }
+.anim-stagger > *:nth-child(8) { animation-delay: 0.39s; }
+
+/* SVG ring sweep. The ring geometry sets stroke-dasharray + --ring-circumference. */
+.anim-ring-draw {
+  animation: bahari-ring-draw 0.9s cubic-bezier(0.3, 0.7, 0.2, 1) both;
+}
+
+.anim-check-draw {
+  animation: bahari-check-draw 0.55s cubic-bezier(0.6, 0, 0.3, 1) 0.1s both;
+}
+
+/* Confidence / distribution meter fill. Element sets --meter: <pct>%. */
+.anim-meter {
+  width: 0;
+  animation: bahari-meter-fill 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s forwards;
+}
+
+/* Skeleton shimmer block. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: #141414;
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: bahari-shimmer 1.3s ease-in-out infinite;
+}
+
+/* Scanning sweep for the AI "looking at the photo" state. */
+.scan-frame {
+  position: relative;
+  overflow: hidden;
+}
+.scan-frame::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 30%;
+  background: linear-gradient(
+    180deg,
+    rgba(103, 152, 255, 0) 0%,
+    rgba(103, 152, 255, 0.28) 50%,
+    rgba(103, 152, 255, 0) 100%
+  );
+  animation: bahari-scan 1.25s ease-in-out infinite;
+}
+@keyframes bahari-scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(380%);
+  }
+}
+
+/* Reduced-motion: make sure the few animations that START hidden do not get
+   stuck invisible when the global rule collapses their duration. For these the
+   near-zero duration + fill-mode:both already lands on the final (visible)
+   frame; this block hard-guarantees the resting state regardless. */
+@media (prefers-reduced-motion: reduce) {
+  .anim-fade-up,
+  .anim-fade-in,
+  .anim-pop,
+  .anim-glow,
+  .anim-stagger > * {
+    opacity: 1 !important;
+    transform: none !important;
+    animation: none !important;
+  }
+  .anim-ring-draw {
+    stroke-dashoffset: var(--ring-offset, 0) !important;
+    animation: none !important;
+  }
+  .anim-check-draw {
+    stroke-dashoffset: 0 !important;
+    animation: none !important;
+  }
+  .anim-meter {
+    width: var(--meter, 100%) !important;
+    animation: none !important;
+  }
+  .skeleton::after,
+  .scan-frame::after {
+    animation: none !important;
+  }
+}

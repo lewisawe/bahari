@@ -5,6 +5,7 @@ import { LAND_USES } from '../core/context.js';
 import { trend } from '../core/history.js';
 import { useT } from '../i18n/I18n.jsx';
 import Sparkline from '../ui/Sparkline.jsx';
+import MapSkeleton from '../ui/MapSkeleton.jsx';
 
 const StreamMap = lazy(() => import('../ui/StreamMap.jsx'));
 
@@ -33,13 +34,7 @@ export default function StepStream({ streamId, onPick, landUse, onLandUse, histo
       </div>
 
       {showMap && (
-        <Suspense
-          fallback={
-            <div className="h-[260px] rounded border border-steel bg-section grid place-items-center text-ash text-sm">
-              Loading map…
-            </div>
-          }
-        >
+        <Suspense fallback={<MapSkeleton height={260} label={t('map.loading')} />}>
           <StreamMap
             streams={streams}
             selectedId={streamId}

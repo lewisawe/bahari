@@ -59,7 +59,7 @@ export default function StepOneHealth({ counts, context, onBack, onNext }) {
       </div>
 
       {/* flags grouped by audience */}
-      <div className="space-y-2">
+      <div className="space-y-2 anim-stagger">
         {oh.flags.map((f) => (
           <FlagCard key={f.id} flag={f} />
         ))}

@@ -3,7 +3,7 @@ import React from 'react';
 // Tiny inline sparkline for a stream's score history (1..10 scale).
 // Pure SVG, no deps. Points are scores in chronological order.
 
-export default function Sparkline({ points = [], width = 120, height = 32, color = '#127a8a' }) {
+export default function Sparkline({ points = [], width = 120, height = 32, color = '#6798ff' }) {
   const vals = points.filter((n) => typeof n === 'number');
   if (vals.length < 2) return null;
 

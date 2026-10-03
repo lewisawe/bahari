@@ -3,16 +3,18 @@ import { aggregate } from './core/aggregate.js';
 import { Eyebrow } from './ui/primitives.jsx';
 import { healthColorForClass } from './core/health-colors.js';
 import { useT } from './i18n/I18n.jsx';
+import MapSkeleton from './ui/MapSkeleton.jsx';
 
 const StreamMap = lazy(() => import('./ui/StreamMap.jsx'));
 
 export default function Dashboard({ streams = [], historyByStream = {}, onOpenStream }) {
   const { t } = useT();
   const a = aggregate(streams, historyByStream);
+  const isEmpty = a.assessmentTotal === 0;
 
   return (
     <div className="space-y-5">
-      <div>
+      <div className="anim-fade-up">
         <Eyebrow>{t('dash.eyebrow')}</Eyebrow>
         <h2 className="text-2xl font-semibold tracking-tight mt-1">{t('dash.title')}</h2>
         <p className="text-sm text-ash mt-1">
@@ -22,13 +24,7 @@ export default function Dashboard({ streams = [], historyByStream = {}, onOpenSt
       </div>
 
       {/* map of all streams */}
-      <Suspense
-        fallback={
-          <div className="h-[300px] rounded border border-steel bg-section grid place-items-center text-ash text-sm">
-            Loading map…
-          </div>
-        }
-      >
+      <Suspense fallback={<MapSkeleton height={300} label={t('map.loading')} />}>
         <StreamMap
           streams={streams}
           historyByStream={historyByStream}
@@ -38,8 +34,14 @@ export default function Dashboard({ streams = [], historyByStream = {}, onOpenSt
         />
       </Suspense>
 
+      {isEmpty && (
+        <p className="rounded bg-section border border-steel px-4 py-3 text-sm text-ash anim-fade-up">
+          {t('dash.empty')}
+        </p>
+      )}
+
       {/* stat cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 anim-stagger">
         <Stat value={a.streamCount} label="Monitoring points" />
         <Stat value={a.assessmentTotal} label="Assessments" />
         <Stat
@@ -59,8 +61,8 @@ export default function Dashboard({ streams = [], historyByStream = {}, onOpenSt
               <span className="w-20 text-xs text-ash shrink-0">{d.label}</span>
               <div className="flex-1 h-3 rounded-full bg-ink overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${d.pct}%`, background: d.color }}
+                  className="anim-meter h-full rounded-full"
+                  style={{ '--meter': `${d.pct}%`, background: d.color }}
                 />
               </div>
               <span className="font-mono text-[11px] text-ash w-16 text-right shrink-0">
