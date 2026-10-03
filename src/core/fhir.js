@@ -44,6 +44,7 @@
 import { scoreAssessment } from './biotic-index.js';
 import { scoreReliability } from './reliability.js';
 import { translateOneHealth } from './one-health.js';
+import { getTaxon } from './taxa.js';
 
 // Custom CodeSystem for Bahari-specific concepts that have no standard
 // equivalent yet. Namespaced under the project's real published identity
@@ -60,6 +61,70 @@ const PROFILE_LOCATION = `${IG}/location-oah`;
 const PROFILE_OBS_IND = `${IG}/observation-indicators-oah`;
 const PROFILE_SPECIMEN = `${IG}/specimen-oah`;
 
+const PROFILE_LABELS = new Map([
+  [PROFILE_LOCATION, 'LocationOah'],
+  [PROFILE_OBS_IND, 'ObservationIndicatorsOah'],
+  [PROFILE_SPECIMEN, 'SpecimenOah'],
+]);
+const AI_PROVIDERS = new Set(['nova-vision', 'stub', 'stub-fallback']);
+const AI_POLICY_STATUSES = new Set(['defer', 'review', 'suggested']);
+const AI_OUTCOMES = new Set(['agreement', 'disagreement', 'defer']);
+const AI_COMPONENT_CODES = new Set([
+  'reviewed-human-taxon',
+  'model-taxon',
+  'model-confidence',
+  'model-policy-status',
+  'comparison-outcome',
+  'model-provider',
+]);
+const AI_NOT_INCLUDED = 'AI provenance is not included in this export.';
+
+/**
+ * Return whether untrusted AI review data can be exported as provenance.
+ * @param {unknown} aiReview
+ * @param {unknown} photoId
+ * @param {unknown} counts
+ * @returns {boolean}
+ */
+export function isExportableAiReview(aiReview, photoId, counts) {
+  try {
+    if (!isObject(aiReview) || !isObject(aiReview.human) || !isObject(aiReview.model)) return false;
+    if (!isObject(counts)) return false;
+
+    const { human, model } = aiReview;
+    const humanTaxon = typeof human.taxonId === 'string' ? getTaxon(human.taxonId) : null;
+    if (!humanTaxon || !Number.isFinite(counts[humanTaxon.id]) || counts[humanTaxon.id] <= 0) return false;
+    if (human.source !== 'citizen-count' || !validDateTime(human.confirmedAt)) return false;
+    if (typeof photoId !== 'string' || photoId.length === 0 || model.photoId !== photoId) return false;
+
+    const modelTaxon = model.taxonId === null
+      ? null
+      : typeof model.taxonId === 'string'
+        ? getTaxon(model.taxonId)
+        : undefined;
+    if (modelTaxon === undefined || (model.taxonId !== null && !modelTaxon)) return false;
+    if (typeof model.confidence !== 'number' || !Number.isFinite(model.confidence) || model.confidence < 0 || model.confidence > 1) return false;
+    if (!AI_PROVIDERS.has(model.provider) || !AI_POLICY_STATUSES.has(model.policyStatus)) return false;
+    if (!validDateTime(model.analyzedAt) || !AI_OUTCOMES.has(aiReview.outcome)) return false;
+
+    const expectedPolicy = modelTaxon === null || model.confidence < 0.5
+      ? 'defer'
+      : model.confidence < 0.75
+        ? 'review'
+        : 'suggested';
+    if (model.policyStatus !== expectedPolicy) return false;
+
+    const expectedOutcome = expectedPolicy === 'defer'
+      ? 'defer'
+      : modelTaxon.id === humanTaxon.id
+        ? 'agreement'
+        : 'disagreement';
+    return aiReview.outcome === expectedOutcome;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Build a FHIR R4 Bundle from an assessment.
  * @param {{
@@ -67,6 +132,8 @@ const PROFILE_SPECIMEN = `${IG}/specimen-oah`;
  *   counts: Object.<string, number>,
  *   submission: object,          // for reliability (see reliability.js)
  *   context: object,             // for One Health (see one-health.js)
+ *   aiReview?: object,           // guarded advisory provenance
+ *   photoId?: string|null,       // must exactly match aiReview.model.photoId
  *   when?: string,               // ISO datetime; defaults to now
  *   idGen?: () => string,        // injectable id generator (tests -> deterministic)
  * }} input
@@ -78,6 +145,8 @@ export function buildBundle(input) {
     counts = {},
     submission = {},
     context = {},
+    aiReview = null,
+    photoId = null,
     when = new Date().toISOString(),
     idGen = defaultUuid,
   } = input || {};
@@ -92,6 +161,8 @@ export function buildBundle(input) {
   const bioticId = `urn:uuid:${idGen()}`;
   const reliabilityId = `urn:uuid:${idGen()}`;
   const oneHealthId = `urn:uuid:${idGen()}`;
+  const exportableAiReview = isExportableAiReview(aiReview, photoId, counts);
+  const aiReviewId = exportableAiReview ? `urn:uuid:${idGen()}` : null;
 
   const entries = [];
 
@@ -192,6 +263,49 @@ export function buildBundle(input) {
     }));
   }
 
+  // Advisory AI provenance stays separate from the citizen-authored count.
+  // It is deliberately unprofiled and is emitted only after the total guard
+  // proves that the review matches the current photo, count, and policy.
+  if (exportableAiReview) {
+    const humanTaxon = getTaxon(aiReview.human.taxonId);
+    const modelTaxon = aiReview.model.taxonId === null ? null : getTaxon(aiReview.model.taxonId);
+    const components = [
+      aiCodeableComponent('reviewed-human-taxon', `taxon-${humanTaxon.id}`, humanTaxon.commonName),
+      ...(modelTaxon
+        ? [aiCodeableComponent('model-taxon', `taxon-${modelTaxon.id}`, modelTaxon.commonName)]
+        : []),
+      {
+        code: bahariCode('model-confidence', 'Model confidence'),
+        valueQuantity: {
+          value: aiReview.model.confidence,
+          unit: '1',
+          system: 'http://unitsofmeasure.org',
+          code: '1',
+        },
+      },
+      aiCodeableComponent('model-policy-status', aiReview.model.policyStatus),
+      aiCodeableComponent('comparison-outcome', aiReview.outcome),
+      aiCodeableComponent('model-provider', aiReview.model.provider),
+    ];
+    const notes = Array.isArray(aiReview.model.cues)
+      ? aiReview.model.cues
+        .filter((cue) => typeof cue === 'string' && cue.trim())
+        .map((cue) => ({ text: cue.trim() }))
+      : [];
+
+    entries.push(entry(aiReviewId, {
+      resourceType: 'Observation',
+      status: 'final',
+      code: bahariCode('ai-identification-second-opinion', 'AI identification second opinion'),
+      subject: { reference: locId, display: stream?.name },
+      specimen: { reference: specimenId },
+      effectiveDateTime: aiReview.model.analyzedAt,
+      derivedFrom: [{ reference: bioticId }],
+      component: components,
+      ...(notes.length ? { note: notes } : {}),
+    }));
+  }
+
   // 4) Observation — data reliability of the citizen submission. Kept as a plain
   //    Observation (derivedFrom the biotic one); its subject is the Location too.
   entries.push(entry(reliabilityId, {
@@ -280,6 +394,261 @@ export function buildBundle(input) {
 
 function entry(fullUrl, resource) {
   return { fullUrl, resource };
+}
+
+/**
+ * Derive a display model strictly from evidence present in a Bundle.
+ * @param {unknown} bundle
+ * @returns {{resourceCounts:Object.<string,number>,resources:object[],profiles:object[],relationships:object[],oneHealth:object|null,aiProvenance:object|null,aiProvenanceMessage:string|null}}
+ */
+export function inspectBundle(bundle) {
+  const indexed = new Map();
+  if (isObject(bundle) && Array.isArray(bundle.entry)) {
+    for (const item of bundle.entry) {
+      if (
+        isObject(item) &&
+        typeof item.fullUrl === 'string' &&
+        item.fullUrl &&
+        isObject(item.resource) &&
+        typeof item.resource.resourceType === 'string' &&
+        item.resource.resourceType
+      ) {
+        indexed.set(item.fullUrl, item.resource);
+      }
+    }
+  }
+
+  const resourceCounts = {};
+  const resources = [];
+  const profiles = [];
+  const relationships = [];
+  for (const [fullUrl, resource] of indexed) {
+    resourceCounts[resource.resourceType] = (resourceCounts[resource.resourceType] || 0) + 1;
+    const label = resourceLabel(resource);
+    resources.push({ fullUrl, resourceType: resource.resourceType, label });
+
+    if (Array.isArray(resource.meta?.profile)) {
+      for (const profile of resource.meta.profile) {
+        const profileLabel = PROFILE_LABELS.get(profile);
+        if (profileLabel) profiles.push({ fullUrl, resourceType: resource.resourceType, profile, label: profileLabel });
+      }
+    }
+
+    addRelationship(relationships, indexed, { fullUrl, resource, label }, 'subject', resource.subject?.reference);
+    addRelationship(relationships, indexed, { fullUrl, resource, label }, 'specimen', resource.specimen?.reference);
+    if (Array.isArray(resource.derivedFrom)) {
+      for (const derived of resource.derivedFrom) {
+        addRelationship(relationships, indexed, { fullUrl, resource, label }, 'derivedFrom', derived?.reference);
+      }
+    }
+  }
+
+  const oneHealthEntry = [...indexed].find(([, resource]) =>
+    resource.resourceType === 'Observation' && hasCode(resource.code, SYS, 'one-health-assessment'));
+  const oneHealth = oneHealthEntry
+    ? {
+        fullUrl: oneHealthEntry[0],
+        label: resourceLabel(oneHealthEntry[1]),
+        value: readCodeableValue(oneHealthEntry[1].valueCodeableConcept),
+        notes: readNotes(oneHealthEntry[1].note),
+      }
+    : null;
+
+  const aiProvenance = inspectAiProvenance(indexed);
+  return {
+    resourceCounts,
+    resources,
+    profiles,
+    relationships,
+    oneHealth,
+    aiProvenance,
+    aiProvenanceMessage: aiProvenance ? null : AI_NOT_INCLUDED,
+  };
+}
+
+function inspectAiProvenance(indexed) {
+  try {
+    const matches = [...indexed].filter(([, resource]) =>
+      resource.resourceType === 'Observation' && hasExactCode(resource.code, SYS, 'ai-identification-second-opinion'));
+    if (matches.length !== 1) return null;
+
+    const [fullUrl, observation] = matches[0];
+    if (observation.status !== 'final' || !validDateTime(observation.effectiveDateTime)) return null;
+    if (!Array.isArray(observation.component)) return null;
+
+    const components = new Map();
+    for (const component of observation.component) {
+      if (!isObject(component)) return null;
+      const coding = exactCoding(component.code);
+      if (!coding || coding.system !== SYS || !AI_COMPONENT_CODES.has(coding.code) || components.has(coding.code)) return null;
+      components.set(coding.code, component);
+    }
+
+    const humanCode = exactValueCode(components.get('reviewed-human-taxon'));
+    const policyStatus = exactValueCode(components.get('model-policy-status'));
+    const outcome = exactValueCode(components.get('comparison-outcome'));
+    const provider = exactValueCode(components.get('model-provider'));
+    const confidence = exactConfidence(components.get('model-confidence'));
+    if (!humanCode || confidence === null) return null;
+    if (!AI_POLICY_STATUSES.has(policyStatus) || !AI_OUTCOMES.has(outcome) || !AI_PROVIDERS.has(provider)) return null;
+
+    const humanTaxon = taxonFromCode(humanCode);
+    if (!humanTaxon) return null;
+    const modelComponent = components.get('model-taxon');
+    const modelCode = modelComponent ? exactValueCode(modelComponent) : null;
+    const modelTaxon = modelCode ? taxonFromCode(modelCode) : null;
+    if (modelComponent && !modelTaxon) return null;
+
+    const expectedComponentCount = policyStatus === 'defer' ? 5 : 6;
+    if (components.size !== expectedComponentCount) return null;
+    if (policyStatus === 'defer' ? modelComponent !== undefined : !modelTaxon) return null;
+
+    const expectedPolicy = modelTaxon === null || confidence < 0.5
+      ? 'defer'
+      : confidence < 0.75
+        ? 'review'
+        : 'suggested';
+    if (policyStatus !== expectedPolicy) return null;
+    const expectedOutcome = expectedPolicy === 'defer'
+      ? 'defer'
+      : modelTaxon.id === humanTaxon.id
+        ? 'agreement'
+        : 'disagreement';
+    if (outcome !== expectedOutcome) return null;
+
+    if (!Array.isArray(observation.derivedFrom) || observation.derivedFrom.length !== 1) return null;
+    const derivedFrom = observation.derivedFrom[0]?.reference;
+    const humanObservation = indexed.get(derivedFrom);
+    if (
+      typeof derivedFrom !== 'string' ||
+      humanObservation?.resourceType !== 'Observation' ||
+      !hasCode(humanObservation.code, SYS, 'biotic-index') ||
+      !Array.isArray(humanObservation.component) ||
+      !humanObservation.component.some((component) => hasExactCode(component?.code, SYS, humanCode))
+    ) return null;
+
+    return {
+      fullUrl,
+      derivedFrom,
+      humanTaxon: { id: humanTaxon.id, label: humanTaxon.commonName, code: humanCode },
+      modelTaxon: modelTaxon
+        ? { id: modelTaxon.id, label: modelTaxon.commonName, code: modelCode }
+        : null,
+      confidence,
+      policyStatus,
+      outcome,
+      provider,
+      analyzedAt: observation.effectiveDateTime,
+      cues: readNotes(observation.note),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function addRelationship(target, indexed, source, relationship, reference) {
+  if (typeof reference !== 'string' || !reference) return;
+  const resolvedResource = indexed.get(reference);
+  target.push({
+    sourceFullUrl: source.fullUrl,
+    sourceType: source.resource.resourceType,
+    sourceLabel: source.label,
+    relationship,
+    targetReference: reference,
+    targetType: resolvedResource?.resourceType ?? null,
+    targetLabel: resolvedResource ? resourceLabel(resolvedResource) : reference,
+    resolved: Boolean(resolvedResource),
+  });
+}
+
+function resourceLabel(resource) {
+  if (resource.resourceType === 'Location' && typeof resource.name === 'string' && resource.name) return resource.name;
+  if (resource.resourceType === 'Specimen') {
+    return resource.type?.text || firstCoding(resource.type)?.display || 'Specimen';
+  }
+  if (resource.resourceType === 'Observation') {
+    return resource.code?.text || firstCoding(resource.code)?.display || firstCoding(resource.code)?.code || 'Observation';
+  }
+  return resource.resourceType;
+}
+
+function bahariCode(code, display) {
+  return { coding: [{ system: SYS, code, ...(display ? { display } : {}) }] };
+}
+
+function aiCodeableComponent(componentCode, valueCode, display) {
+  return {
+    code: bahariCode(componentCode),
+    valueCodeableConcept: bahariCode(valueCode, display),
+  };
+}
+
+function firstCoding(codeable) {
+  return Array.isArray(codeable?.coding) ? codeable.coding.find(isObject) : null;
+}
+
+function hasCode(codeable, system, code) {
+  return Array.isArray(codeable?.coding) && codeable.coding.some((coding) =>
+    isObject(coding) && coding.system === system && coding.code === code);
+}
+
+function hasExactCode(codeable, system, code) {
+  const coding = exactCoding(codeable);
+  return Boolean(coding && coding.system === system && coding.code === code);
+}
+
+function exactCoding(codeable) {
+  if (!isObject(codeable) || !Array.isArray(codeable.coding) || codeable.coding.length !== 1) return null;
+  const coding = codeable.coding[0];
+  return isObject(coding) && typeof coding.system === 'string' && typeof coding.code === 'string'
+    ? coding
+    : null;
+}
+
+function exactValueCode(component) {
+  if (!isObject(component) || !hasOnlyValueField(component, 'valueCodeableConcept')) return null;
+  const coding = exactCoding(component.valueCodeableConcept);
+  return coding?.system === SYS ? coding.code : null;
+}
+
+function exactConfidence(component) {
+  if (!isObject(component) || !hasOnlyValueField(component, 'valueQuantity') || !isObject(component.valueQuantity)) return null;
+  const quantity = component.valueQuantity;
+  return typeof quantity.value === 'number' && Number.isFinite(quantity.value) && quantity.value >= 0 && quantity.value <= 1 &&
+    quantity.unit === '1' && quantity.system === 'http://unitsofmeasure.org' && quantity.code === '1'
+    ? quantity.value
+    : null;
+}
+
+function hasOnlyValueField(component, expected) {
+  const valueFields = Object.keys(component).filter((key) => key.startsWith('value'));
+  return valueFields.length === 1 && valueFields[0] === expected;
+}
+
+function taxonFromCode(code) {
+  if (typeof code !== 'string' || !code.startsWith('taxon-')) return null;
+  return getTaxon(code.slice(6)) || null;
+}
+
+function readCodeableValue(codeable) {
+  const coding = firstCoding(codeable);
+  return isObject(codeable)
+    ? { code: typeof coding?.code === 'string' ? coding.code : null, text: typeof codeable.text === 'string' ? codeable.text : null }
+    : null;
+}
+
+function readNotes(notes) {
+  return Array.isArray(notes)
+    ? notes.filter((note) => isObject(note) && typeof note.text === 'string').map((note) => note.text)
+    : [];
+}
+
+function validDateTime(value) {
+  return typeof value === 'string' && value.length > 0 && Number.isFinite(Date.parse(value));
+}
+
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**

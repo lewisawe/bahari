@@ -473,15 +473,22 @@ function AppInner() {
   }
 
   const handleBundleReady = useCallback((bundle) => {
+    const bundleRecordId = assessmentRecord.id;
     const current = latestSnapshotRef.current;
-    if (!current || current.id !== activeRecordIdRef.current || current.status !== 'saved') return;
+    if (
+      !current ||
+      current.id !== bundleRecordId ||
+      current.id !== activeRecordIdRef.current ||
+      current.status !== 'saved' ||
+      current.lastStepIndex !== 4
+    ) return;
     const snapshot = { ...current, fhirBundle: bundle, completedAt: current.completedAt, updatedAt: new Date().toISOString() };
     if (recordFingerprint(snapshot) === recordFingerprint(current)) return;
     latestSnapshotRef.current = snapshot;
     setAssessmentRecord(snapshot);
     upsertRecord(snapshot);
     enqueueSave({ record: snapshot, reason: 'fhir-bundle' });
-  }, [enqueueSave, upsertRecord]);
+  }, [assessmentRecord.id, enqueueSave, upsertRecord]);
 
   async function flushLatestSnapshot() {
     const current = latestSnapshotRef.current;
@@ -541,7 +548,7 @@ function AppInner() {
             {step.key === 'assess' && <StepAssess counts={assessment.counts} photo={assessment.photo} photoReady={Boolean(photoBlob && assessment.photo)} aiReview={assessment.aiReview} onChange={changeCounts} onPhotoChange={handlePhotoChange} onPhotoRemove={handlePhotoRemove} onAnalyze={handleAiAnalysis} onBack={() => go(0)} onNext={() => go(2)} />}
             {step.key === 'result' && <StepResult counts={assessment.counts} streamName={stream?.name} submission={submission} onBack={() => go(1)} onNext={goOneHealth} onRestart={restart} />}
             {step.key === 'onehealth' && <StepOneHealth counts={assessment.counts} context={context} onBack={() => go(2)} onNext={() => go(4)} />}
-            {step.key === 'fhir' && <StepFhir stream={stream} counts={assessment.counts} submission={submission} context={context} onBundleReady={handleBundleReady} onBack={() => go(3)} onRestart={restart} />}
+            {step.key === 'fhir' && <StepFhir stream={stream} counts={assessment.counts} submission={submission} context={context} aiReview={assessment.aiReview} photoId={assessment.photo?.id ?? null} onBundleReady={handleBundleReady} onBack={() => go(3)} onRestart={restart} />}
           </div>}
         </main>
       )}
