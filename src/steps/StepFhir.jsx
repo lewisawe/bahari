@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { buildBundle, validateBundle } from '../core/fhir.js';
 import { GhostButton, PrimaryButton, Eyebrow } from '../ui/primitives.jsx';
 import { HEALTH_COLORS } from '../core/health-colors.js';
@@ -7,7 +7,7 @@ import { useT } from '../i18n/I18n.jsx';
 const GOOD = HEALTH_COLORS.good; // '#3ecf8e'
 const BAD = HEALTH_COLORS.very_poor; // '#ff6b6b'
 
-export default function StepFhir({ stream, counts, submission, context, onBack, onRestart }) {
+export default function StepFhir({ stream, counts, submission, context, onBundleReady, onBack, onRestart }) {
   const { t } = useT();
   const [showRaw, setShowRaw] = useState(false);
 
@@ -16,6 +16,10 @@ export default function StepFhir({ stream, counts, submission, context, onBack, 
     [stream, counts, submission, context],
   );
   const validation = useMemo(() => validateBundle(bundle), [bundle]);
+
+  useEffect(() => {
+    onBundleReady?.(bundle);
+  }, [bundle, onBundleReady]);
 
   function download() {
     const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/fhir+json' });

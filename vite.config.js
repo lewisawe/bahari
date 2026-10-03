@@ -1,6 +1,10 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { TAXA, getTaxon } from './src/core/taxa.js';
+import { renderServiceWorker } from './scripts/render-service-worker.mjs';
 
 // ---------------------------------------------------------------------------
 // Local dev-only Nova Pro (Amazon Bedrock) vision proxy.
@@ -218,11 +222,51 @@ function novaProxyPlugin() {
   };
 }
 
+function sha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function bahariServiceWorkerPlugin() {
+  return {
+    name: 'bahari-service-worker',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      const fixedAssets = [
+        ['index.html', 'index.html'],
+        ['manifest.webmanifest', 'public/manifest.webmanifest'],
+        ['icons/bahari-192.png', 'public/icons/bahari-192.png'],
+        ['icons/bahari-512.png', 'public/icons/bahari-512.png'],
+      ];
+      const records = [];
+      const referencedChunks = new Set();
+      for (const item of Object.values(bundle)) {
+        if (item.type !== 'chunk') continue;
+        for (const name of [...item.imports, ...item.dynamicImports]) referencedChunks.add(name);
+      }
+      for (const [name, item] of Object.entries(bundle)) {
+        if (name === 'sw.js' || name.endsWith('.map')) continue;
+        if (item.type === 'chunk' && item.code.trim().length === 0) continue;
+        if (item.type === 'chunk' && !item.isEntry && !referencedChunks.has(name)) continue;
+        const content = item.type === 'chunk' ? item.code : item.source;
+        records.push({ name, contentHash: sha256(content) });
+      }
+      for (const [name, path] of fixedAssets) {
+        if (records.some((record) => record.name === name)) continue;
+        records.push({ name, contentHash: sha256(readFileSync(resolve(path))) });
+      }
+      records.sort((a, b) => a.name.localeCompare(b.name));
+      const buildId = sha256(records.map(({ name, contentHash }) => `${name}:${contentHash}`).join('\n')).slice(0, 16);
+      const source = renderServiceWorker({ buildId, assets: records.map(({ name }) => name) });
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+    },
+  };
+}
+
 export default defineConfig({
   // Relative base so the built app works on any static host (GitHub Pages
   // subpath, Netlify, Vercel) and even when opened from the filesystem.
   base: './',
-  plugins: [react(), novaProxyPlugin()],
+  plugins: [react(), novaProxyPlugin(), bahariServiceWorkerPlugin()],
   test: {
     environment: 'node',
     globals: false,

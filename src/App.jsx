@@ -1,9 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import seed from './data/seed-streams.json';
-import { STEPS, newAssessment, elapsedSeconds } from './core/assessment.js';
+import { STEPS, elapsedSeconds, newAssessment } from './core/assessment.js';
 import { buildContext, fetchRecentRain } from './core/context.js';
 import { scoreAssessment } from './core/biotic-index.js';
-import { loadUserHistory, saveAssessment, mergedHistory } from './core/history.js';
+import { loadLegacyHistory, mergedHistory } from './core/history.js';
+import {
+  buildRecordExport,
+  historyMapFromRecords,
+  migrateLegacyHistory,
+  openDeviceRecords,
+  recordFingerprint,
+  reconstructRecord,
+  reconstructRecords,
+  selectRecordExportSource,
+} from './core/device-records.js';
+import { applyWaitingUpdate, getUpdateState, subscribeUpdateState } from './core/service-worker-client.js';
 import { Stepper2 } from './ui/primitives.jsx';
 import { I18nProvider, useT } from './i18n/I18n.jsx';
 import { LANGUAGES } from './i18n/strings.js';
@@ -14,132 +25,392 @@ import StepOneHealth from './steps/StepOneHealth.jsx';
 import StepFhir from './steps/StepFhir.jsx';
 import Dashboard from './Dashboard.jsx';
 import Landing from './Landing.jsx';
+import FieldRecords from './ui/FieldRecords.jsx';
+import DeviceStatus from './ui/DeviceStatus.jsx';
 
-// Bahari — guided assessment flow.
-// Step machine: stream -> assess -> result -> onehealth -> fhir.
-// Plus a researcher "overview" dashboard view.
-
-// App is wrapped in its own I18nProvider so it works standalone (and in tests)
-// without callers needing to provide one.
 export default function App() {
-  return (
-    <I18nProvider>
-      <AppInner />
-    </I18nProvider>
-  );
+  return <I18nProvider><AppInner /></I18nProvider>;
 }
 
 function AppInner() {
   const { t, lang, setLang } = useT();
   const streams = seed.streams || [];
-  const [view, setView] = useState('home'); // 'home' | 'assess' | 'overview'
-  const [stepIndex, setStepIndex] = useState(0);
-  const [assessment, setAssessment] = useState(() => newAssessment(streams[0]?.id ?? null));
-  const [landUse, setLandUse] = useState('mixed');
-  const [rain, setRain] = useState(null); // filled from Open-Meteo when reaching One Health
-  const [userHistory, setUserHistory] = useState({}); // { streamId: entry[] }
-  const [saved, setSaved] = useState(false); // has this assessment been persisted?
+  const firstRecordRef = useRef(null);
+  if (!firstRecordRef.current) firstRecordRef.current = createPendingRecord(newAssessment(streams[0]?.id ?? null));
 
-  useEffect(() => {
-    setUserHistory(loadUserHistory());
+  const [view, setView] = useState('home');
+  const [stepIndex, setStepIndex] = useState(0);
+  const [assessmentRecord, setAssessmentRecord] = useState(firstRecordRef.current);
+  const [records, setRecords] = useState([]);
+  const [photoBlob, setPhotoBlob] = useState(null);
+  const [storageMode, setStorageMode] = useState('memory');
+  const [storageWarning, setStorageWarning] = useState(null);
+  const [unsavedIds, setUnsavedIds] = useState(() => new Set([firstRecordRef.current.id]));
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  const [updateState, setUpdateState] = useState(getUpdateState());
+  const [operationError, setOperationError] = useState(null);
+  const [updateFailure, setUpdateFailure] = useState(false);
+
+  const adapterRef = useRef(null);
+  const storageModeRef = useRef('memory');
+  const activeTrackedRef = useRef(false);
+  const latestSnapshotRef = useRef(firstRecordRef.current);
+  const activeRecordIdRef = useRef(firstRecordRef.current.id);
+  const activePhotoBlobRef = useRef(null);
+  const activeWeatherRequestRef = useRef(null);
+  const weatherRequestIdRef = useRef(0);
+  const countTimerRef = useRef(null);
+  const pendingJobsRef = useRef(new Map());
+  const runningIdsRef = useRef(new Set());
+  const queuedFingerprintsRef = useRef(new Map());
+  const inFlightFingerprintsRef = useRef(new Map());
+  const lastDurableFingerprintByRecord = useRef(new Map());
+  const drainSaveRef = useRef(null);
+
+  const upsertRecord = useCallback((record) => {
+    setRecords((current) => {
+      const next = current.filter((item) => item.id !== record.id);
+      next.push(record);
+      return next.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    });
   }, []);
 
+  const markUnsaved = useCallback((id, unsaved) => {
+    setUnsavedIds((current) => {
+      const next = new Set(current);
+      if (unsaved) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const enqueueSave = useCallback(({ record, photoChange, reason = 'autosave' }) => {
+    const fingerprint = recordFingerprint(record);
+    const id = record.id;
+    if (
+      lastDurableFingerprintByRecord.current.get(id) === fingerprint ||
+      queuedFingerprintsRef.current.get(id) === fingerprint ||
+      inFlightFingerprintsRef.current.get(id) === fingerprint
+    ) return;
+    pendingJobsRef.current.set(id, { record, photoChange, reason, fingerprint });
+    queuedFingerprintsRef.current.set(id, fingerprint);
+    markUnsaved(id, true);
+    queueMicrotask(() => drainSaveRef.current?.(id));
+  }, [markUnsaved]);
+
+  drainSaveRef.current = async (id) => {
+    if (runningIdsRef.current.has(id) || !adapterRef.current) return;
+    const job = pendingJobsRef.current.get(id);
+    if (!job) return;
+    pendingJobsRef.current.delete(id);
+    queuedFingerprintsRef.current.delete(id);
+    runningIdsRef.current.add(id);
+    inFlightFingerprintsRef.current.set(id, job.fingerprint);
+    try {
+      const result = await adapterRef.current.putRecord(job.record, job.photoChange);
+      if (result.durable) {
+        lastDurableFingerprintByRecord.current.set(id, job.fingerprint);
+        const latest = id === activeRecordIdRef.current ? latestSnapshotRef.current : job.record;
+        if (recordFingerprint(latest) === job.fingerprint) markUnsaved(id, false);
+      } else {
+        markUnsaved(id, true);
+      }
+      setStorageWarning(result.durable ? null : storageWarning || new Error('memory-only'));
+    } catch (error) {
+      setStorageWarning(error);
+      markUnsaved(id, true);
+    } finally {
+      runningIdsRef.current.delete(id);
+      inFlightFingerprintsRef.current.delete(id);
+      if (pendingJobsRef.current.has(id)) queueMicrotask(() => drainSaveRef.current?.(id));
+    }
+  };
+
+  const stageSnapshot = useCallback((record, { save = 'immediate', photoChange, reason } = {}) => {
+    activeTrackedRef.current = true;
+    latestSnapshotRef.current = record;
+    activeRecordIdRef.current = record.id;
+    setAssessmentRecord(record);
+    upsertRecord(record);
+    markUnsaved(record.id, recordFingerprint(record) !== lastDurableFingerprintByRecord.current.get(record.id));
+    if (countTimerRef.current) {
+      clearTimeout(countTimerRef.current);
+      countTimerRef.current = null;
+    }
+    if (save === 'debounced') {
+      countTimerRef.current = setTimeout(() => enqueueSave({ record: latestSnapshotRef.current, reason: reason || 'counts' }), 600);
+    } else if (save === 'immediate') {
+      enqueueSave({ record, photoChange, reason });
+    }
+  }, [enqueueSave, markUnsaved, upsertRecord]);
+
+  const refreshRecords = useCallback(async () => {
+    if (!adapterRef.current) return;
+    try {
+      const normalized = reconstructRecords(await adapterRef.current.listRecords(), streams, setStorageWarning);
+      const active = latestSnapshotRef.current;
+      if (activeTrackedRef.current && active && !normalized.some((record) => record.id === active.id)) normalized.push(active);
+      setRecords(normalized.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)));
+    } catch (error) {
+      setStorageWarning(error);
+    }
+  }, [streams]);
+
+  const resumeRecord = useCallback(async (id, { consumeQuery = false } = {}) => {
+    if (!adapterRef.current) return false;
+    try {
+      const raw = await adapterRef.current.getRecord(id);
+      const record = reconstructRecord(raw, streams, setStorageWarning);
+      if (!record) throw new Error('invalid record');
+      let storedPhoto = null;
+      try { storedPhoto = await adapterRef.current.getPhoto(id); }
+      catch (error) { setStorageWarning(error); }
+      const blob = storedPhoto?.blob instanceof Blob ? storedPhoto.blob : null;
+      let restored = record;
+      if (record.assessment.photo && !blob && record.assessment.aiReview) {
+        restored = {
+          ...record,
+          assessment: { ...record.assessment, aiReview: null, aiAssisted: false },
+          submission: { ...record.submission, aiAssisted: false },
+        };
+      }
+      activeWeatherRequestRef.current = null;
+      activeTrackedRef.current = true;
+      activeRecordIdRef.current = restored.id;
+      latestSnapshotRef.current = restored;
+      activePhotoBlobRef.current = blob;
+      setPhotoBlob(blob);
+      setAssessmentRecord(restored);
+      setStepIndex(restored.lastStepIndex);
+      setView('assess');
+      setOperationError(null);
+      if (storageModeRef.current !== 'memory') {
+        lastDurableFingerprintByRecord.current.set(restored.id, recordFingerprint(restored));
+        markUnsaved(restored.id, false);
+      }
+      upsertRecord(restored);
+      if (consumeQuery) clearResumeQuery();
+      return true;
+    } catch {
+      setOperationError(t('records.error.resume'));
+      return false;
+    }
+  }, [markUnsaved, storageMode, streams, t, upsertRecord]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const opened = await openDeviceRecords();
+      if (cancelled) return;
+      adapterRef.current = opened.adapter;
+      storageModeRef.current = opened.mode;
+      setStorageMode(opened.mode);
+      setStorageWarning(opened.warning);
+      try {
+        const migration = await migrateLegacyHistory(opened.adapter, loadLegacyHistory(), streams);
+        if (migration.warnings.length) setStorageWarning(migration.warnings[0]);
+      } catch (error) {
+        setStorageWarning(error);
+      }
+      await refreshRecords();
+      const resumeId = new URL(location.href).searchParams.get('resume');
+      if (resumeId) await resumeRecord(resumeId, { consumeQuery: true });
+      for (const id of pendingJobsRef.current.keys()) drainSaveRef.current?.(id);
+    })();
+    return () => { cancelled = true; };
+  }, []); // initialization is intentionally once per app session
+
+  useEffect(() => subscribeUpdateState(setUpdateState), []);
+  useEffect(() => {
+    const updateOnline = () => setOnline(navigator.onLine !== false);
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    const flushHidden = () => {
+      if (document.visibilityState === 'hidden' && latestSnapshotRef.current) {
+        enqueueSave({ record: latestSnapshotRef.current, reason: 'hidden' });
+      }
+    };
+    document.addEventListener('visibilitychange', flushHidden);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+      document.removeEventListener('visibilitychange', flushHidden);
+    };
+  }, [enqueueSave]);
+
+  const assessment = assessmentRecord.assessment;
+  const landUse = assessmentRecord.landUse;
+  const rain = assessmentRecord.rain;
   const step = STEPS[stepIndex];
-  const stream = streams.find((s) => s.id === assessment.streamId) || null;
+  const stream = streams.find((item) => item.id === assessment.streamId) || null;
+  const context = useMemo(() => buildContext({ date: assessment.createdAt, landUse, rain }), [assessment.createdAt, landUse, rain]);
+  const submission = useMemo(() => buildSubmission(assessment, assessmentRecord.completedAt), [assessment, assessmentRecord.completedAt]);
 
-  const go = (i) => setStepIndex(Math.max(0, Math.min(STEPS.length - 1, i)));
-  const update = (patch) => setAssessment((a) => ({ ...a, ...patch }));
-
-  const context = buildContext({ date: new Date(), landUse, rain });
-
-  // Merged (seed + user) history for the selected stream, for StepStream display.
+  const deviceHistory = useMemo(() => historyMapFromRecords(records), [records]);
   const historyByStream = useMemo(() => {
     const map = {};
-    for (const s of streams) {
-      map[s.id] = mergedHistory(s.history || [], userHistory[s.id] || []);
-    }
+    for (const item of streams) map[item.id] = mergedHistory(item.history || [], deviceHistory[item.id] || []);
     return map;
-  }, [streams, userHistory]);
+  }, [deviceHistory, streams]);
 
-  // Build the submission passed to the reliability scorer. Seed streams are real
-  // GBIF stream locations, so location is present and on-stream.
-  function buildSubmission() {
-    return {
-      counts: assessment.counts,
-      photoConfirmed: assessment.photoConfirmed,
-      aiAssisted: assessment.aiAssisted,
-      location: stream ? { lat: stream.lat, lon: stream.lon } : null,
-      locationOnStream: stream ? true : null,
-      durationSec: elapsedSeconds(assessment),
-    };
+  function patchRecord({ assessmentPatch, ...recordPatch }, options) {
+    const current = latestSnapshotRef.current;
+    const updatedAt = new Date().toISOString();
+    const nextAssessment = assessmentPatch ? { ...current.assessment, ...assessmentPatch, updatedAt } : current.assessment;
+    const nextSubmission = recordPatch.submission ?? buildSubmission(nextAssessment, current.completedAt);
+    stageSnapshot({ ...current, ...recordPatch, submission: nextSubmission, assessment: nextAssessment, updatedAt }, options);
   }
 
-  // When moving into One Health, try a live rain lookup (free, keyless), and
-  // persist the completed assessment to "your stream" history (once).
-  async function goOneHealth() {
-    go(3);
-    persistAssessment();
-    if (stream && rain == null) {
-      const r = await fetchRecentRain({ lat: stream.lat, lon: stream.lon });
-      setRain(r);
+  function changeCounts(counts) {
+    let aiReview = assessment.aiReview;
+    let aiAssisted = assessment.aiAssisted;
+    if (aiReview && !(counts[aiReview.human?.taxonId] > 0)) {
+      aiReview = null;
+      aiAssisted = false;
     }
+    patchRecord({ assessmentPatch: { counts, aiReview, aiAssisted } }, { save: 'debounced', reason: 'counts' });
   }
 
-  function persistAssessment() {
-    if (saved || !stream) return;
-    const biotic = scoreAssessment(assessment.counts);
+  function go(nextIndex) {
+    const bounded = Math.max(0, Math.min(STEPS.length - 1, nextIndex));
+    patchRecord({ lastStepIndex: bounded }, { reason: 'step-transition' });
+    setStepIndex(bounded);
+  }
+
+  async function goOneHealth() {
+    const current = latestSnapshotRef.current;
+    const biotic = scoreAssessment(current.assessment.counts);
     if (biotic.score === null) return;
-    const entry = {
-      date: new Date().toISOString().slice(0, 10),
+    const completedAt = current.completedAt ?? new Date().toISOString();
+    const savedRecord = {
+      ...current,
+      status: 'saved',
+      lastStepIndex: 3,
+      submission: buildSubmission(current.assessment, completedAt),
       score: biotic.score,
       classKey: biotic.classKey,
-      counts: assessment.counts,
+      completedAt,
+      updatedAt: new Date().toISOString(),
     };
-    setUserHistory(saveAssessment(stream.id, entry));
-    setSaved(true);
+    stageSnapshot(savedRecord, { reason: 'completion' });
+    setStepIndex(3);
+    if (!stream || savedRecord.rain !== null) return;
+
+    const tuple = { assessmentId: savedRecord.id, streamId: stream.id, requestId: ++weatherRequestIdRef.current };
+    activeWeatherRequestRef.current = tuple;
+    try {
+      const nextRain = await fetchRecentRain({ lat: stream.lat, lon: stream.lon });
+      const active = activeWeatherRequestRef.current;
+      const latest = latestSnapshotRef.current;
+      if (!active || active.requestId !== tuple.requestId || active.assessmentId !== latest.id || active.streamId !== latest.assessment.streamId) return;
+      const postRain = { ...latest, rain: nextRain, updatedAt: new Date().toISOString() };
+      stageSnapshot(postRain, { reason: 'weather' });
+    } catch (error) {
+      if (activeWeatherRequestRef.current?.requestId === tuple.requestId) {
+        setStorageWarning(error);
+        console.warn(`[Bahari weather] lookup: ${error?.name || 'Error'}`);
+      }
+    }
   }
 
-  function restart() {
-    setAssessment(newAssessment(assessment.streamId));
-    setRain(null);
-    setSaved(false);
-    go(0);
-  }
-
-  // From the dashboard: jump into the citizen flow at a chosen stream.
-  function openStreamFromDashboard(streamId) {
-    setAssessment(newAssessment(streamId));
-    setRain(null);
-    setSaved(false);
+  function startRecord(streamId) {
+    activeWeatherRequestRef.current = null;
+    const record = createPendingRecord(newAssessment(streamId));
+    activeRecordIdRef.current = record.id;
+    latestSnapshotRef.current = record;
+    activePhotoBlobRef.current = null;
+    setPhotoBlob(null);
+    setAssessmentRecord(record);
     setStepIndex(0);
     setView('assess');
+    stageSnapshot(record, { reason: 'new-assessment' });
   }
+
+  function restart() { startRecord(assessment.streamId); }
+  function openStreamFromDashboard(streamId) { startRecord(streamId); }
+
+  async function deleteRecord(record) {
+    const name = streams.find((item) => item.id === record.assessment.streamId)?.name || t('records.unknownStream');
+    if (!window.confirm(t('records.confirmDelete', { name }))) return;
+    try {
+      await adapterRef.current?.deleteRecord(record.id);
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+      setUnsavedIds((current) => { const next = new Set(current); next.delete(record.id); return next; });
+      lastDurableFingerprintByRecord.current.delete(record.id);
+      if (activeRecordIdRef.current === record.id) startRecord(record.assessment.streamId);
+      setOperationError(null);
+    } catch {
+      setOperationError(t('records.error.delete'));
+    }
+  }
+
+  async function exportRecord(id, includePhoto = false) {
+    try {
+      const rawStored = await adapterRef.current?.getRecord(id);
+      const stored = rawStored ? reconstructRecord(rawStored, streams, setStorageWarning) : records.find((record) => record.id === id);
+      const source = selectRecordExportSource({
+        id,
+        activeRecordId: activeRecordIdRef.current,
+        latestSnapshot: latestSnapshotRef.current,
+        lastDurableFingerprint: lastDurableFingerprintByRecord.current.get(id),
+        storedRecord: stored,
+      });
+      let blob = null;
+      if (includePhoto) {
+        if (id === activeRecordIdRef.current) blob = activePhotoBlobRef.current;
+        if (!blob) blob = (await adapterRef.current?.getPhoto(id))?.blob ?? null;
+      }
+      const payload = await buildRecordExport(source, { includePhoto, photoBlob: blob });
+      downloadJson(payload, `bahari-record-${id}.json`);
+      setOperationError(null);
+    } catch {
+      setOperationError(t('records.error.export'));
+    }
+  }
+
+  const handleBundleReady = useCallback((bundle) => {
+    const current = latestSnapshotRef.current;
+    if (!current || current.id !== activeRecordIdRef.current || current.status !== 'saved') return;
+    const snapshot = { ...current, fhirBundle: bundle, completedAt: current.completedAt, updatedAt: new Date().toISOString() };
+    if (recordFingerprint(snapshot) === recordFingerprint(current)) return;
+    latestSnapshotRef.current = snapshot;
+    setAssessmentRecord(snapshot);
+    upsertRecord(snapshot);
+    enqueueSave({ record: snapshot, reason: 'fhir-bundle' });
+  }, [enqueueSave, upsertRecord]);
+
+  async function flushLatestSnapshot() {
+    const current = latestSnapshotRef.current;
+    if (!current) return { durable: true, recordId: null, fingerprint: null };
+    if (!adapterRef.current) throw new Error('storage unavailable');
+    const fingerprint = recordFingerprint(current);
+    const result = await adapterRef.current.putRecord(current);
+    if (!result.durable) return { durable: false, recordId: current.id, fingerprint };
+    lastDurableFingerprintByRecord.current.set(current.id, fingerprint);
+    markUnsaved(current.id, false);
+    return { durable: true, recordId: current.id, fingerprint };
+  }
+
+  async function handleApplyUpdate() {
+    setUpdateFailure(false);
+    const applied = await applyWaitingUpdate({
+      flushLatestSnapshot,
+      activeRecordId: activeRecordIdRef.current,
+    });
+    if (!applied) setUpdateFailure(true);
+  }
+
+  const currentFingerprint = recordFingerprint(assessmentRecord);
+  const durable = lastDurableFingerprintByRecord.current.get(assessmentRecord.id) === currentFingerprint;
+  const unsaved = unsavedIds.has(assessmentRecord.id);
 
   return (
     <div className="min-h-screen font-sans text-snow flex flex-col">
-      <a
-        href="#main"
-        className="sr-only focus:not-sr-only focus:absolute focus:z-[999] focus:top-2 focus:left-2 focus:bg-snow focus:text-ink focus:px-3 focus:py-2 focus:rounded"
-      >
-        {t('common.skip')}
-      </a>
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-[999] focus:top-2 focus:left-2 focus:bg-snow focus:text-ink focus:px-3 focus:py-2 focus:rounded">{t('common.skip')}</a>
       <header className="grid-motif bg-ink border-b border-steel px-5 pt-4 pb-3 sticky top-0 z-[500]">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <button
-            onClick={() => setView('home')}
-            className="flex items-center gap-2.5 text-left"
-            aria-label="Bahari home"
-          >
-            <span
-              className="w-7 h-7 rounded grid place-items-center bg-accent text-ink font-bold text-sm"
-              aria-hidden="true"
-            >
-              B
-            </span>
-            <div>
-              <h1 className="text-base font-semibold tracking-tight leading-none">Bahari</h1>
-              <p className="eyebrow mt-1">{t('app.tagline')}</p>
-            </div>
+          <button onClick={() => setView('home')} className="flex min-h-11 items-center gap-2.5 text-left" aria-label="Bahari home">
+            <span className="w-7 h-7 rounded grid place-items-center bg-accent text-ink font-bold text-sm" aria-hidden="true">B</span>
+            <div><h1 className="text-base font-semibold tracking-tight leading-none">Bahari</h1><p className="eyebrow mt-1">{t('app.tagline')}</p></div>
           </button>
           <div className="flex items-center gap-3">
             {view === 'assess' && <Stepper2 steps={STEPS} activeIndex={stepIndex} />}
@@ -147,131 +418,88 @@ function AppInner() {
             <LangToggle lang={lang} setLang={setLang} />
           </div>
         </div>
-        {/* view switch — not shown on the landing page */}
-        {view !== 'home' && (
-          <nav aria-label={t('nav.views')} className="max-w-xl mx-auto mt-3 flex gap-1 bg-section border border-steel rounded p-1">
-            <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>
-              {t('nav.assess')}
-            </ViewTab>
-            <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>
-              {t('nav.overview')}
-            </ViewTab>
-          </nav>
-        )}
+        {view !== 'home' && <nav aria-label={t('nav.views')} className="max-w-xl mx-auto mt-3 grid grid-cols-3 gap-1 bg-section border border-steel rounded p-1">
+          <ViewTab active={view === 'assess'} onClick={() => setView('assess')}>{t('nav.assess')}</ViewTab>
+          <ViewTab active={view === 'overview'} onClick={() => setView('overview')}>{t('nav.overview')}</ViewTab>
+          <ViewTab active={view === 'records'} onClick={() => setView('records')}>{t('nav.records')}</ViewTab>
+        </nav>}
       </header>
 
-      {view === 'home' ? (
-        <main id="main" className="flex-1 w-full">
-          <Landing onStart={() => setView('assess')} onExplore={() => setView('overview')} />
-        </main>
-      ) : (
+      {view !== 'home' && <DeviceStatus online={online} durable={durable} unsaved={unsaved} mode={storageMode} warning={storageWarning} updateState={updateState} updateFailure={updateFailure} onApplyUpdate={handleApplyUpdate} />}
+
+      {view === 'home' ? <main id="main" className="flex-1 w-full"><Landing onStart={() => setView('assess')} onExplore={() => setView('overview')} /></main> : (
         <main id="main" className="flex-1 w-full max-w-xl mx-auto px-5 py-8">
-          {view === 'overview' ? (
-          <Dashboard
-            key="overview"
-            streams={streams}
-            historyByStream={historyByStream}
-            onOpenStream={openStreamFromDashboard}
-          />
-        ) : (
-          <div key={`step-${stepIndex}`} className="anim-fade-up">
-            {step.key === 'stream' && (
-              <StepStream
-                streamId={assessment.streamId}
-                onPick={(id) => update({ streamId: id })}
-                landUse={landUse}
-                onLandUse={setLandUse}
-                historyByStream={historyByStream}
-                onNext={() => go(1)}
-              />
-            )}
-
-            {step.key === 'assess' && (
-              <StepAssess
-                counts={assessment.counts}
-                onChange={(counts) => update({ counts })}
-                onPhotoConfirmed={() => update({ photoConfirmed: true, aiAssisted: true })}
-                onBack={() => go(0)}
-                onNext={() => go(2)}
-              />
-            )}
-
-            {step.key === 'result' && (
-              <StepResult
-                counts={assessment.counts}
-                streamName={stream?.name}
-                submission={buildSubmission()}
-                onBack={() => go(1)}
-                onNext={goOneHealth}
-                onRestart={restart}
-              />
-            )}
-
-            {step.key === 'onehealth' && (
-              <StepOneHealth
-                counts={assessment.counts}
-                context={context}
-                onBack={() => go(2)}
-                onNext={() => go(4)}
-              />
-            )}
-
-            {step.key === 'fhir' && (
-              <StepFhir
-                stream={stream}
-                counts={assessment.counts}
-                submission={buildSubmission()}
-                context={context}
-                onBack={() => go(3)}
-                onRestart={restart}
-              />
-            )}
-          </div>
-        )}
+          {view === 'overview' ? <Dashboard key="overview" streams={streams} historyByStream={historyByStream} onOpenStream={openStreamFromDashboard} /> : view === 'records' ? (
+            <FieldRecords records={records} streams={streams} activeRecordId={assessmentRecord.id} unsavedIds={unsavedIds} onResume={resumeRecord} onExport={exportRecord} onDelete={deleteRecord} operationError={operationError} />
+          ) : <div key={`step-${stepIndex}`} className="anim-fade-up">
+            {step.key === 'stream' && <StepStream streamId={assessment.streamId} onPick={(id) => patchRecord({ assessmentPatch: { streamId: id }, rain: null }, { reason: 'stream' })} landUse={landUse} onLandUse={(value) => patchRecord({ landUse: value }, { reason: 'land-use' })} historyByStream={historyByStream} onNext={() => go(1)} />}
+            {step.key === 'assess' && <StepAssess counts={assessment.counts} onChange={changeCounts} onPhotoConfirmed={() => patchRecord({ assessmentPatch: { photoConfirmed: Boolean(assessment.photo), aiAssisted: assessment.aiAssisted } }, { reason: 'photo' })} onPhotoChange={({ metadata, blob }) => { activePhotoBlobRef.current = blob; setPhotoBlob(blob); patchRecord({ assessmentPatch: { photo: metadata, photoConfirmed: true, aiReview: null, aiAssisted: false } }, { photoChange: { metadata, blob }, reason: 'photo' }); }} onPhotoRemove={() => { activePhotoBlobRef.current = null; setPhotoBlob(null); patchRecord({ assessmentPatch: { photo: null, photoConfirmed: false, aiReview: null, aiAssisted: false } }, { photoChange: null, reason: 'photo-remove' }); }} onBack={() => go(0)} onNext={() => go(2)} />}
+            {step.key === 'result' && <StepResult counts={assessment.counts} streamName={stream?.name} submission={submission} onBack={() => go(1)} onNext={goOneHealth} onRestart={restart} />}
+            {step.key === 'onehealth' && <StepOneHealth counts={assessment.counts} context={context} onBack={() => go(2)} onNext={() => go(4)} />}
+            {step.key === 'fhir' && <StepFhir stream={stream} counts={assessment.counts} submission={submission} context={context} onBundleReady={handleBundleReady} onBack={() => go(3)} onRestart={restart} />}
+          </div>}
         </main>
       )}
-
-      <footer className="border-t border-steel text-center py-3 px-5">
-        <span className="eyebrow">
-          Bahari · IEEE OneAquaHealth 2026 · stream to One Health
-        </span>
-      </footer>
+      <footer className="border-t border-steel text-center py-3 px-5"><span className="eyebrow">Bahari · IEEE OneAquaHealth 2026 · stream to One Health</span></footer>
     </div>
   );
+}
+
+function createPendingRecord(assessment) {
+  return {
+    id: assessment.id,
+    schemaVersion: 1,
+    status: 'pending',
+    lastStepIndex: 0,
+    assessment,
+    landUse: 'mixed',
+    rain: null,
+    submission: buildSubmission(assessment, null),
+    score: null,
+    classKey: null,
+    fhirBundle: null,
+    createdAt: assessment.createdAt,
+    updatedAt: assessment.updatedAt,
+    completedAt: null,
+  };
+}
+
+function buildSubmission(assessment, completedAt) {
+  const durationSec = completedAt && Number.isFinite(assessment.startedAt)
+    ? Math.max(0, Math.round((Date.parse(completedAt) - assessment.startedAt) / 1000))
+    : elapsedSeconds(assessment);
+  return {
+    counts: assessment.counts,
+    photoConfirmed: assessment.photoConfirmed,
+    aiAssisted: assessment.aiAssisted,
+    location: assessment.location,
+    locationOnStream: assessment.locationOnStream,
+    durationSec,
+  };
+}
+
+function downloadJson(payload, filename) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function clearResumeQuery() {
+  const url = new URL(location.href);
+  url.searchParams.delete('resume');
+  history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
 }
 
 function ViewTab({ active, onClick, children }) {
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={active}
-      className={
-        'flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors ' +
-        (active ? 'bg-card text-snow' : 'text-ash hover:text-snow')
-      }
-    >
-      {children}
-    </button>
-  );
+  return <button onClick={onClick} aria-pressed={active} className={'min-h-11 rounded px-2 py-2 text-sm font-medium transition-colors ' + (active ? 'bg-card text-snow' : 'text-ash hover:text-snow')}>{children}</button>;
 }
 
 function LangToggle({ lang, setLang }) {
-  return (
-    <div className="flex items-center gap-0.5 bg-section border border-steel rounded p-0.5" role="group" aria-label="Language">
-      {LANGUAGES.map((l) => (
-        <button
-          key={l.code}
-          onClick={() => setLang(l.code)}
-          aria-pressed={lang === l.code}
-          aria-label={l.name}
-          className={
-            'font-mono text-[10px] uppercase tracking-code px-1.5 py-1 rounded-tag transition-colors ' +
-            (lang === l.code ? 'bg-card text-snow' : 'text-ash hover:text-snow')
-          }
-        >
-          {l.label}
-        </button>
-      ))}
-    </div>
-  );
+  return <div className="flex items-center gap-0.5 bg-section border border-steel rounded p-0.5" role="group" aria-label="Language">{LANGUAGES.map((item) => <button key={item.code} onClick={() => setLang(item.code)} aria-pressed={lang === item.code} aria-label={item.name} className={'font-mono text-[10px] uppercase tracking-code min-w-11 min-h-11 px-1.5 py-1 rounded-tag transition-colors ' + (lang === item.code ? 'bg-card text-snow' : 'text-ash hover:text-snow')}>{item.label}</button>)}</div>;
 }

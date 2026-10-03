@@ -1,89 +1,63 @@
-// Bahari — "your stream" history persistence.
-//
-// Completed assessments are appended to a per-stream history in the browser's
-// localStorage, so a citizen returning to the same stream sees their readings
-// build into a trend over time (the repeat-engagement loop). Seed streams ship
-// with clearly-labeled sample history; user assessments are stored separately
-// and merged for display, so we never mutate the seed data.
-//
-// The merge + trend logic is pure and testable; the storage read/write is a
-// thin wrapper that degrades gracefully if localStorage is unavailable.
+// Legacy completion history. New writes use device-records.js; this reader stays
+// available for the one-time atomic migration.
 
-const KEY = 'bahari.history.v1';
+export const LEGACY_HISTORY_KEY = 'bahari.history.v1';
 
-/**
- * @typedef {Object} HistoryEntry
- * @property {string} date       YYYY-MM-DD
- * @property {number|null} score
- * @property {string|null} classKey
- * @property {Object.<string,number>} [counts]
- * @property {boolean} [synthetic]  true for seed sample data
- * @property {boolean} [mine]       true for this user's own assessments
- */
-
-/** Read the whole user-history map: { [streamId]: HistoryEntry[] }. */
-export function loadUserHistory(storage = safeStorage()) {
+export function loadLegacyHistory(storage = safeStorage()) {
   if (!storage) return {};
   try {
-    const raw = storage.getItem(KEY);
-    return raw ? JSON.parse(raw) : {};
+    const raw = storage.getItem(LEGACY_HISTORY_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
 }
 
-/** Persist a completed assessment to a stream's user history. Returns updated map. */
+export const loadUserHistory = loadLegacyHistory;
+
 export function saveAssessment(streamId, entry, storage = safeStorage()) {
-  const all = loadUserHistory(storage);
-  const list = all[streamId] ? [...all[streamId]] : [];
+  const all = loadLegacyHistory(storage);
+  const list = Array.isArray(all[streamId]) ? [...all[streamId]] : [];
   list.push({ ...entry, mine: true });
   all[streamId] = list;
   if (storage) {
     try {
-      storage.setItem(KEY, JSON.stringify(all));
+      storage.setItem(LEGACY_HISTORY_KEY, JSON.stringify(all));
     } catch {
-      /* ignore quota / privacy-mode errors */
+      // Legacy compatibility writes intentionally degrade without throwing.
     }
   }
   return all;
 }
 
-/** Clear all user history (used by a "reset demo" affordance / tests). */
 export function clearUserHistory(storage = safeStorage()) {
-  if (storage) {
-    try {
-      storage.removeItem(KEY);
-    } catch {
-      /* ignore */
-    }
+  if (!storage) return;
+  try {
+    storage.removeItem(LEGACY_HISTORY_KEY);
+  } catch {
+    // Storage can be unavailable in privacy modes.
   }
 }
 
-/**
- * Merge seed (sample) history with the user's own entries for one stream,
- * sorted by date ascending. Pure — no storage access.
- * @param {HistoryEntry[]} seedHistory
- * @param {HistoryEntry[]} userHistory
- * @returns {HistoryEntry[]}
- */
 export function mergedHistory(seedHistory = [], userHistory = []) {
-  const seed = seedHistory.map((e) => ({ ...e, synthetic: true }));
-  const mine = userHistory.map((e) => ({ ...e, mine: true }));
-  return [...seed, ...mine].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const seed = seedHistory.map((entry) => ({ ...entry, synthetic: true }));
+  const mine = userHistory.map((entry) => ({ ...entry, mine: true }));
+  return [...seed, ...mine]
+    .map((entry, stableIndex) => ({ entry, stableIndex }))
+    .sort((a, b) => {
+      const byDate = String(a.entry.date).localeCompare(String(b.entry.date));
+      if (byDate) return byDate;
+      const aOrder = Number.isFinite(a.entry.sourceOrder) ? a.entry.sourceOrder : a.stableIndex;
+      const bOrder = Number.isFinite(b.entry.sourceOrder) ? b.entry.sourceOrder : b.stableIndex;
+      return aOrder - bOrder || a.stableIndex - b.stableIndex;
+    })
+    .map(({ entry }) => entry);
 }
 
-/**
- * Compute a simple trend across a history series (ignoring null scores).
- * @param {HistoryEntry[]} history
- * @returns {{direction:'improving'|'declining'|'stable'|'insufficient', delta:number|null, points:number[]}}
- */
 export function trend(history = []) {
-  const points = history
-    .map((e) => e.score)
-    .filter((s) => typeof s === 'number');
-  if (points.length < 2) {
-    return { direction: 'insufficient', delta: null, points };
-  }
+  const points = history.map((entry) => entry.score).filter((score) => typeof score === 'number');
+  if (points.length < 2) return { direction: 'insufficient', delta: null, points };
   const delta = round1(points[points.length - 1] - points[0]);
   let direction = 'stable';
   if (delta >= 0.5) direction = 'improving';
@@ -93,13 +67,12 @@ export function trend(history = []) {
 
 function safeStorage() {
   try {
-    if (typeof localStorage !== 'undefined') return localStorage;
+    return typeof localStorage === 'undefined' ? null : localStorage;
   } catch {
-    /* access can throw in some privacy modes */
+    return null;
   }
-  return null;
 }
 
-function round1(n) {
-  return Math.round(n * 10) / 10;
+function round1(value) {
+  return Math.round(value * 10) / 10;
 }

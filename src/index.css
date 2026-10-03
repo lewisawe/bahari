@@ -302,3 +302,22 @@ body {
     animation: none !important;
   }
 }
+
+/* Local-first field queue. The 44px action height remains explicit when text wraps. */
+.field-record-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
+}
+
+.record-action {
+  min-height: 44px;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background-color 150ms ease-in-out, border-color 150ms ease-in-out;
+}
+
+.record-action:hover {
+  background-color: #1e1e1e;
+}
