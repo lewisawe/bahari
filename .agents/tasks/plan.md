@@ -1,525 +1,113 @@
-# Implementation Plan — FHIR IG Alignment & Submission Hardening (Bahari)
+# Implementation Plan — Replace Gemini adapter with Amazon Nova Pro (Bedrock) via local Vite dev proxy
 
-All paths are absolute under the worktree root:
-`/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/fhir-ig-align`
-(abbreviated below as `<ROOT>`). Do NOT edit anything outside this worktree.
+All paths are absolute. Work only inside the worktree
+`/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter`.
+Commit locally on branch `nova-adapter`; never push.
 
-Baseline verified during planning: `npm test` = **122 passing**, `npm run build`
-succeeds. Keep both green at every step.
+## Context discovered during exploration (ground truth for the implementer)
 
----
+- Build tool: Vite 6 (`vite.config.js`). `base: './'`, `@vitejs/plugin-react`. Vitest config is embedded in the SAME `vite.config.js` under the `test` key: `environment: 'node'`, `globals: false`, include `src/**/*.test.js(x)`.
+- Test env is **node by default**; browser-DOM test files opt in with a top-of-file `// @vitest-environment jsdom` comment (see `/home/sierra/.../src/a11y.test.jsx`, `/home/sierra/.../src/App.smoke.test.jsx`). `src/core/ai-assist.test.js` runs under **node** — so there is no `FileReader`/`window`/real `fetch` there. novaProvider tests MUST inject/mock fetch and must NOT depend on `FileReader`.
+- Baseline: `npm test` = **132 passing** across 13 files. `src/core/ai-assist.test.js` currently has **17 tests**, 6 of which are the Gemini-adapter block to be replaced.
+- `@aws-sdk/*` is NOT installed (`node_modules/@aws-sdk` absent). Must be added to **devDependencies** and installed.
+- `submission/` does NOT exist on disk (gitignored dir, not materialized). The task says edit it anyway → the implementer must CREATE `submission/TRACKS.md` and `submission/PROJECT.md` only if they already exist; since they do not exist, see item 9 for exact handling (create them with the honest Nova framing).
+- No `.env` / `.env.example` file exists in the worktree. Only `src/core/ai-assist.js` + `README.md` reference `VITE_GEMINI_API_KEY`. There is nothing else to scrub.
+- `ai-assist.js` consumers: `src/ui/AssistPanel.jsx` (calls `identifyTaxon({ photoName, hintTaxonId, seed })` and `getProviderName()`), and `src/core/assessment.js` (only a comment mention, no code use). `AssistPanel` is used by `src/steps/StepAssess.jsx`.
+- `AssistPanel.jsx` today only ever has the FILENAME (`photoName`), never the image bytes: `onPickPhoto` stores `f.name`; `runAssist` passes `{ photoName, hintTaxonId, seed: name.length }`. No File/Blob is retained.
+- The default provider at module load is `stubProvider` (`let provider = stubProvider`). Nothing in the app calls `setAssistProvider` at startup — the shipped default is the stub. **Keep it that way**: the deployed static site must use the stub unless something opts into Nova. (The dev proxy only exists under `npm run dev`; novaProvider auto-falls-back to the stub when `/api/identify` is absent.)
 
-## Key findings from exploration (read before implementing)
+### Design decisions (made here; implementer follows these, does not re-decide)
 
-1. **The worktree branch `fhir-ig-align` == `main` == commit `ecc2220`.** They
-   point to the identical committed tree.
-
-2. **`submission/` is GITIGNORED** (see `<ROOT>/.gitignore`: the lines
-   `submission/`, `PLAN.md`, `DESIGN.md`, etc.). The files `submission/PROJECT.md`,
-   `submission/TRACKS.md`, `submission/FHIR_VALIDATION.md`, `submission/README.md`,
-   `submission/DEMO_SCRIPT.md` exist only as **untracked local files in the main
-   working copy** at `/home/sierra/Desktop/projects/hackathons/oneaquahealth/submission/`.
-   They are NOT present in this worktree and will NOT appear in the branch's git
-   diff even after you create them (gitignore still applies here).
-   - Implication: Task 2 doc edits must still be made (the user wants the files
-     correct on disk), but a reviewer reading `git diff` will not see them. Create
-     the `submission/` files in THIS worktree at the stated paths, seeding each
-     from the current main copy (contents reproduced in the steps below so you do
-     not need to read outside the worktree). Record in your findings that these
-     are gitignored so the reviewer does not flag them as "missing".
-   - `README.md` IS tracked and in this worktree — its edits are normal and will
-     show in the diff.
-
-3. **FHIR validation reality on public HAPI R4** (probed live during planning,
-   `https://hapi.fhir.org/baseR4/$validate`):
-   - An `Observation` whose `subject` is a `urn:uuid:` reference validates with
-     **0 errors** (HAPI does not resolve the referenced resource's type in a
-     single-resource `$validate`, so Location-as-subject is structurally fine).
-     This overturns the stale claim in the old `FHIR_VALIDATION.md` that
-     `Observation.subject` cannot be a Location. The official IG constrains
-     `ObservationIndicatorsOah.subject` to `Reference(LocationOah)`, which proves
-     base R4 permits it.
-   - A `LocationOah`-shaped Location, a `SpecimenOah`-shaped Specimen, a full
-     `Observation` (with `performer`, `specimen`, `component`), and a `Device`
-     performer each validate with **0 errors** against base R4 WITHOUT
-     `meta.profile`.
-   - **CRITICAL:** When `meta.profile` points at an IG canonical the public HAPI
-     server CANNOT fetch (e.g. `http://hl7.eu/fhir/ig/oah/StructureDefinition/location-oah`),
-     HAPI emits a HARD **error**: `"Invalid profile. Failed to retrieve profile
-     with url=..."` and `"Profile reference ... has not been checked ... validator
-     is set to not fetch unknown profiles"`. These are **profile-fetch errors, not
-     structural errors in our data.**
-   - **Design consequence:** `buildBundle()` MUST emit `meta.profile` (that is the
-     judge-facing IG-alignment win). But the `validate:fhir` script must separate
-     "profile-not-fetchable" errors from genuine structural errors, assert the
-     latter is 0, and document the former as expected. See Step 8.
-
-4. **UI consumer:** `<ROOT>/src/steps/StepFhir.jsx` calls `buildBundle` /
-   `validateBundle` and renders a plain-language resource list. Its copy ALREADY
-   says "Location ... the subject of the record" and "stream is modelled as the
-   record's subject (a non-patient subject)". After the re-model this copy becomes
-   accurate (Location IS the subject). The `ResourceLine` for `Location`,
-   `Observation ×N`, `RiskAssessment` stays valid; there is NO `Group` line to
-   remove. Do a light copy check only — do not restyle. Confirm the smoke test
-   `src/App.smoke.test.jsx` still passes after the change.
-
-5. **Weights reconciliation decision — RECOMMEND PATH A (cite source).** The
-   `taxa.js` groups and weights are: stonefly 10, mayfly 9, caddisfly 8,
-   riffle_beetle 7, dragonfly 6, freshwater_shrimp 5, snail 4, true_fly_larva 4,
-   leech 2, bloodworm 2, worm 1. This is a monotonic 1–10 pollution-sensitivity
-   ordering that mirrors the published **miniSASS** citizen-science sensitivity
-   grouping (miniSASS already defines a simplified 1–10 group-sensitivity scale
-   for exactly these macroinvertebrate groups). So cite miniSASS's group
-   sensitivity scale per group/tier, and for the few where our integer does not
-   land on an exact published miniSASS value (e.g. the two "4" ties, the "5"/"6"
-   mid groups) add a one-line note that the value is positioned by the published
-   sensitivity ORDERING (a documented surrogate within the cited scale). This is
-   Path A with a small, honest Path-B fallback for ties — it does NOT fabricate a
-   numeric source. Keep weights unchanged so `biotic-index.test.js` stays green
-   (see Step 12 — no expected-value changes needed).
+1. **Dev proxy lives in `vite.config.js` via a plugin using `configureServer`** (connect middleware on `server.middlewares`), NOT a separate server file. Rationale: it must exist ONLY under `npm run dev`; `configureServer` hooks run only for the dev server, never for `vite build`/`vite preview`, which guarantees the proxy and its `@aws-sdk` imports never enter the client bundle.
+2. **The `@aws-sdk/*` imports are performed with a dynamic `await import()` INSIDE the request handler** (not a top-of-file `import`). Rationale: `vite.config.js` is a Node config module evaluated by Vite's config loader, not part of the client graph, so even a static import would not reach the browser bundle — but a dynamic import inside the handler is belt-and-suspenders and also avoids paying SDK load cost unless `/api/identify` is actually hit. The browser adapter (`ai-assist.js`) must NEVER import `@aws-sdk/*`; it only `fetch`es `/api/identify`.
+3. **Provider contract is unchanged**: a provider is `async (input) => rawGuess` where `rawGuess = { taxonId, confidence, reasoning:string[], cues:string[], alternatives?:[{taxonId,confidence}] }`, with `fn.providerName` set. `applyConfidencePolicy`, thresholds, `stubProvider`, `setAssistProvider`, `resetAssistProvider`, `getProviderName`, `identifyTaxon` stay byte-for-byte as they are except for the Gemini removal.
+4. **novaProvider input**: accepts `{ imageBase64, imageFormat, hintTaxonId, photoName, seed }`. It POSTs `{ imageBase64, imageFormat, hintTaxonId }` to `/api/identify`. On any failure (fetch throws / non-OK / no endpoint) it falls back to `stubProvider(input)` — and MUST forward `photoName`/`hintTaxonId`/`seed` to the stub so fallback stays deterministic. fetch is injectable (`novaProvider({ fetchImpl })`) for tests.
+5. **AssistPanel**: keep the stub-only filename path working. Add retaining the picked File and converting to base64 ONLY in the browser (guarded so node tests are unaffected). Because the shipped default provider is the stub, AssistPanel passing extra fields is harmless when the stub is active. Do not break any existing AssistPanel/App test.
 
 ---
 
-## Ordering rationale
+## Steps
 
-Task 1 (FHIR) is top priority and is the dependency root for the doc claims in
-Task 2, so it goes first and its tests must be green before docs are written.
-Tasks 3 (AI adapter) and 4 (weights) are independent of Task 1 and of each other.
-Order: FHIR code → FHIR tests → FHIR validation script/doc → positioning docs →
-AI adapter → weights → full green sweep.
+- [ ] 1. **Add AWS SDK dev dependencies and install them in the worktree.**
+      Add to `devDependencies` in `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/package.json`: `@aws-sdk/client-bedrock-runtime` and `@aws-sdk/credential-providers` (pin to the exact resolved versions after install — no `^` drift beyond what npm writes is fine, but prefer the versions npm installs). Run the install in the worktree.
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/package.json`, `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/package-lock.json`
+      Verify: `cd /home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter && npm install @aws-sdk/client-bedrock-runtime @aws-sdk/credential-providers --save-dev` completes; `ls node_modules/@aws-sdk/client-bedrock-runtime node_modules/@aws-sdk/credential-providers` both exist; the two packages appear under `devDependencies` (NOT `dependencies`) in package.json.
 
----
+- [ ] 2. **Write the dev-proxy Vite plugin in `vite.config.js`.**
+      Add a plugin object (e.g. `novaProxyPlugin()`) to the `plugins` array with a `configureServer(server)` hook that registers a connect middleware on `server.middlewares.use('/api/identify', handler)` responding only to POST. The handler must:
+      - Read and JSON-parse the request body (`{ imageBase64, imageFormat, hintTaxonId }`); reject non-POST / bad JSON with HTTP 400.
+      - `const { BedrockRuntimeClient, ConverseCommand } = await import('@aws-sdk/client-bedrock-runtime');` and `const { fromNodeProviderChain } = await import('@aws-sdk/credential-providers');` INSIDE the handler (decision 2).
+      - Decode base64 → `Uint8Array` (e.g. `new Uint8Array(Buffer.from(imageBase64, 'base64'))`). The SDK needs bytes, NOT base64.
+      - Build the known-taxa list from `src/core/taxa.js` (`import { TAXA, TAXON_IDS, getTaxon } from './src/core/taxa.js'` at the top of vite.config.js is fine — it is Node-side only and the file is pure data; prefer importing to keep one source of truth). Build a prompt instructing Nova to return ONLY compact JSON `{ "taxonId": <known id or best-guess common name>, "confidence": <0..1>, "cues": [<short strings>] }`, listing the allowed ids/common names, and passing `hintTaxonId` as a SOFT hint ("if plausible", never forced).
+      - Normalize `imageFormat` to `'png'` or `'jpeg'` (map `image/png`→`png`, `image/jpeg`/`jpg`→`jpeg`; default `jpeg`).
+      - Call Converse: `new ConverseCommand({ modelId: 'us.amazon.nova-pro-v1:0', messages: [{ role: 'user', content: [ { image: { format, source: { bytes } } }, { text: prompt } ] }], inferenceConfig: { maxTokens: 300 } })`. ALWAYS set `maxTokens` (unset → ThrottlingException). Client: `new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'us-east-1', credentials: fromNodeProviderChain({ profile: process.env.AWS_PROFILE }) })`. Never read keys from committed code or `VITE_` vars.
+      - Extract the model text from `response.output.message.content[].text`, strip code fences, extract the first `{...}` with a brace-matching/regex grab, `JSON.parse`.
+      - Map to `{ taxonId, confidence, cues }`: if parsed `taxonId` is a known id → use it; else try closest common-name match against `TAXA[].commonName` (case-insensitive contains / exact) → map to that id; else `taxonId: null` (defer). Clamp confidence to `[0,1]`. `cues` = array of strings (filter non-strings).
+      - On ANY error (parse/AWS/throttle/missing creds) respond with a non-2xx status (e.g. 502) and a small JSON error body, so the browser falls back to the stub. Do not crash the dev server.
+      - Set `Content-Type: application/json` and write the mapped JSON on success (HTTP 200).
+      Keep the existing `base`, `react()` plugin, and `test` config intact; just add the new plugin to the array.
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/vite.config.js`
+      Verify: `cd /home/sierra/.../nova-adapter && npm run build` succeeds (confirms the config still loads and `configureServer` is not invoked during build). Full live Bedrock call is NOT part of automated verification (no network in tests); a manual smoke note is in item 10.
 
-## TASK 1 — Re-model `src/core/fhir.js` to the official OneAquaHealth IG
+- [ ] 3. **Remove the Gemini provider and all its helpers from `src/core/ai-assist.js`.**
+      Delete `geminiProvider`, `mapGeminiResponse` (exported), `extractText`, `parseImagePayload`, `normalizeTaxonId`, `VISION_PROMPT`, `GEMINI_DEFAULT_ENDPOINT`, `defaultGeminiKey`, and the Gemini comment block + the `VITE_GEMINI_API_KEY` security comment. Keep `clamp01`, `TAXA`/`getTaxon` import, and everything else. Do NOT touch `stubProvider`, `setAssistProvider`, `resetAssistProvider`, `getProviderName`, `applyConfidencePolicy`, `identifyTaxon`, `CONFIDENT_THRESHOLD`, `REVIEW_THRESHOLD`, the CUES/LOOKALIKES tables, or the RNG helpers.
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/src/core/ai-assist.js`
+      Verify: `grep -in "gemini\|VITE_GEMINI\|generativelanguage" /home/sierra/.../src/core/ai-assist.js` returns nothing. (Suite will be re-run after the next item adds the replacement + fixes tests.)
 
-### Step 1. Replace the placeholder CodeSystem constant and add IG canonicals.
-In `<ROOT>/src/core/fhir.js`, replace the `SYS` constant and add profile/system
-constants near the top:
+- [ ] 4. **Add `novaProvider()` to `src/core/ai-assist.js` behind the same provider seam.**
+      Export `function novaProvider(opts = {})` with `{ fetchImpl, endpoint = '/api/identify' } = opts`; `doFetch = fetchImpl || (typeof fetch !== 'undefined' ? fetch : undefined)`. The returned `async fn(input = {})`:
+      - If `!doFetch` → `return stubProvider(input)` (node without fetch / offline).
+      - If no `input.imageBase64` → there is nothing for Nova to see → `return stubProvider(input)` (keeps filename-only path on the stub).
+      - Else POST `JSON.stringify({ imageBase64: input.imageBase64, imageFormat: input.imageFormat, hintTaxonId: input.hintTaxonId })` to `endpoint` with `method:'POST'`, `headers:{'Content-Type':'application/json'}`.
+      - If the fetch throws, or `!res.ok`, or res is falsy → `return stubProvider(input)` (THE single fallback place). Preserve forwarding `input` (incl. `photoName`/`seed`/`hintTaxonId`) to the stub so fallback stays deterministic.
+      - On OK: `const data = await res.json()`; map to the provider contract: `{ taxonId: normalizeKnownId(data.taxonId), confidence: clamp01(data.confidence), reasoning: cues, cues, alternatives: [] }` where `cues` = `Array.isArray(data.cues) ? data.cues.filter(s=>typeof s==='string') : []`. Reuse a small local `normalizeKnownId` (returns a known id via `getTaxon`, else null) — re-add a minimal normalizer since the Gemini one was deleted.
+      - Set `fn.providerName = 'nova-vision'` and `return fn`.
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/src/core/ai-assist.js`
+      Verify: `node -e "import('/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/src/core/ai-assist.js').then(m=>{if(!m.novaProvider||m.geminiProvider)process.exit(1);console.log('ok')})"` prints `ok`.
 
-```js
-// Custom CodeSystem for Bahari-specific concepts that have no standard equivalent.
-// Namespaced under the project's real published identity (repo: github.com/lewisawe/bahari).
-const SYS = 'https://lewisawe.github.io/bahari/fhir/CodeSystem/stream-health';
+- [ ] 5. **Replace the Gemini test block in `src/core/ai-assist.test.js` with novaProvider tests (fetch mocked, no real network/AWS).**
+      In the imports, remove `geminiProvider, mapGeminiResponse`; add `novaProvider`. Delete the entire `describe('real vision provider (gemini adapter)', ...)` block. Add `describe('real vision provider (nova adapter)', ...)` with at minimum:
+      (a) **well-formed proxy response maps correctly**: `fetchImpl` mock returns `{ ok:true, status:200, json: async () => ({ taxonId:'mayfly', confidence:0.82, cues:['three tails','feathery gills'] }) }`; call `novaProvider({ fetchImpl })({ imageBase64:'QUJD', imageFormat:'jpeg' })`; assert fetch called once, `raw.taxonId==='mayfly'`, `TAXON_IDS` contains it, `0<=confidence<=1`, `raw.reasoning` is a non-empty string[] equal to `raw.cues`; then `applyConfidencePolicy(raw,'nova-vision').status==='suggested'`.
+      (b) **unknown label → taxonId null → defer**: mock returns `{taxonId:'unicorn',confidence:0.9,cues:['sparkles']}`; assert `raw.taxonId===null` and `applyConfidencePolicy(raw).status==='defer'`.
+      (c) **error path falls back to stub**: `fetchImpl` mock rejects (`Promise.reject(new Error('network'))`); call with `{ imageBase64:'QUJD', photoName:'p.jpg', seed:2 }`; assert the result is stub-shaped (`taxonId`/`confidence` present, `reasoning` is an array), did not throw, and is deterministic (call twice with same input → `toEqual`).
+      (d) **non-OK HTTP → stub fallback**: mock returns `{ ok:false, status:500, json: async()=>({}) }`; assert fetch called once and stub-shaped result.
+      (e) **no imageBase64 → stub WITHOUT network**: `const mock=vi.fn(); novaProvider({fetchImpl:mock})({ photoName:'rock1.jpg', seed:7 })`; assert `mock` NOT called; deterministic (call twice → `toEqual`).
+      (f) **providerName is `nova-vision`**: `expect(novaProvider({fetchImpl:vi.fn()}).providerName).toBe('nova-vision')`.
+      Keep every other `describe` block (confidence policy, stub via identifyTaxon, swappable provider) unchanged. Net test count should stay ~132 (the 6 gemini tests are replaced by ~6 nova tests).
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/src/core/ai-assist.test.js`
+      Verify: `cd /home/sierra/.../nova-adapter && npx vitest run src/core/ai-assist.test.js` passes; then `npm test` → all files green, total ≈ 132 (acceptable range 130–134; state the exact number).
 
-// Official OneAquaHealth HL7 FHIR IG (github.com/hl7-eu/oah), canonical base http://hl7.eu/fhir/ig/oah
-const IG = 'http://hl7.eu/fhir/ig/oah/StructureDefinition';
-const PROFILE_LOCATION  = `${IG}/location-oah`;
-const PROFILE_OBS_IND   = `${IG}/observation-indicators-oah`;
-const PROFILE_SPECIMEN  = `${IG}/specimen-oah`;
-// identifier system for the monitoring site (project-namespaced, non-placeholder)
-const SITE_ID_SYSTEM = 'https://lewisawe.github.io/bahari/fhir/monitoring-site';
-```
+- [ ] 6. **Wire real image bytes into AssistPanel without breaking the stub-only path or any test.**
+      In `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/src/ui/AssistPanel.jsx`: retain the selected `File` object in state (`photoFile`), in addition to `photoName`. In `runAssist`, if a `File` is present AND `FileReader` exists (browser), read it to a base64 string + detect `imageFormat` from `file.type`, and pass `{ photoName, hintTaxonId, seed, imageBase64, imageFormat }` to `identifyTaxon`. When no file / no FileReader (tests under jsdom that don't attach a real file), pass exactly the current `{ photoName, hintTaxonId, seed }` — unchanged behavior. Do NOT call `setAssistProvider` here; the shipped default stays the stub, so these extra fields are inert unless a Nova provider is explicitly installed. Keep the engine label line (`getProviderName()`) and all existing markup/handlers.
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/src/ui/AssistPanel.jsx`
+      Verify: `cd /home/sierra/.../nova-adapter && npx vitest run src/App.smoke.test.jsx src/a11y.test.jsx` passes (these render the assess flow); then `npm test` stays fully green.
 
-- Files: `<ROOT>/src/core/fhir.js`
-- Verify (end of Task 1): `npm test` green; see Step 7–8.
+- [ ] 7. **Confirm the client bundle does NOT import `@aws-sdk/*`, and report bundle sizes.**
+      Build and grep the emitted client assets for any AWS SDK footprint. The proxy lives only in `configureServer`, so a production build must not contain it.
+      Files: (none changed; verification + reporting step)
+      Verify: `cd /home/sierra/.../nova-adapter && npm run build` succeeds; `grep -rl "bedrock-runtime\|@aws-sdk\|BedrockRuntimeClient" dist/ ; test $? -ne 0 && echo "CLEAN: no aws-sdk in dist"` prints `CLEAN...` (grep finds nothing → nonzero exit). Record `dist/` JS/CSS sizes: `find dist -name '*.js' -o -name '*.css' | xargs ls -l` (report each file's bytes in the final summary).
 
-### Step 2. Delete the `Group` entry entirely; make `Location` the subject.
-In `buildBundle()`:
-- Remove the `groupId` id and the entire `entries.push(...)` block that builds the
-  `Group` (type:device) resource. Remove `groupId` from the id list.
-- Add a `specimenId` to the id list alongside `locId`, `bioticId`,
-  `reliabilityId`, `riskId`.
-- Rewrite the `Location` entry to conform to **LocationOah**:
+- [ ] 8. **Update `README.md` — replace every Gemini mention with Amazon Nova Pro / Amazon Bedrock.**
+      In `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/README.md`, rewrite the "Responsible AI" section: engine swappable behind `setAssistProvider`; the shipped real adapter is **Amazon Nova Pro via Amazon Bedrock** (vision Converse API) reached through a **local Vite dev proxy** that authenticates with an **AWS profile server-side** (no browser keys); the **deployed static site runs the deterministic stub via automatic fallback**, so the public demo needs no backend/keys. Document running live locally: `AWS_PROFILE=simi-ops` (optionally `AWS_REGION=us-east-1`) then `npm run dev`; mention model id `us.amazon.nova-pro-v1:0`. Remove the `.env` / `VITE_GEMINI_API_KEY` code block and any Gemini wording. Keep the "no backend required" claim honest for the deployed site.
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/README.md`
+      Verify: `grep -in "gemini\|VITE_GEMINI" /home/sierra/.../README.md` returns nothing; `grep -in "nova\|bedrock\|simi-ops\|us.amazon.nova-pro-v1:0" /home/sierra/.../README.md` shows the new content.
 
-```js
-entries.push(entry(locId, {
-  resourceType: 'Location',
-  meta: { profile: [PROFILE_LOCATION] },
-  identifier: [{ system: SITE_ID_SYSTEM, value: stream?.id || 'unknown-site' }], // 1.. required
-  status: 'active',
-  name: stream?.name || 'Unnamed stream',                                        // 1.. required
-  mode: 'instance',                                                              // fixed #instance
-  description: `Urban freshwater monitoring point${stream?.country ? ` (${stream.country})` : ''}`,
-  physicalType: {
-    coding: [{ system: 'http://terminology.hl7.org/CodeSystem/location-physical-type', code: 'area', display: 'Area' }],
-  },
-  // position.latitude 1..1 and position.longitude 1..1 — always emit both when stream present
-  position: stream ? { longitude: stream.lon, latitude: stream.lat } : undefined,
-}));
-```
-Note: if `stream` is absent the Location omits `position`; the LocationOah profile
-requires it, but base-R4 HAPI validation (how we verify) still passes 0 structural
-errors. Keep the guard to avoid runtime errors.
+- [ ] 9. **Create the `submission/` docs with the Nova framing (dir is gitignored and absent).**
+      `submission/` does not exist on disk. Create `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/submission/TRACKS.md` and `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/submission/PROJECT.md`. In PROJECT.md, state the real adapter as the **"Amazon Nova Pro (Amazon Bedrock) vision adapter"** (NOT "Gemini vision adapter"). In TRACKS.md, under Track 3, describe the responsible-AI story: explainable, human-in-the-loop confidence policy (defer<0.5 / review<0.75 / suggested above) with a **real multimodal model (Amazon Nova Pro) behind a stable `setAssistProvider` seam and automatic stub fallback**; the deployed static demo needs no backend/keys because it uses the stub. Keep framing honest — the differentiator is the explainable gate + stable seam + fallback, not raw model accuracy. Since the files are being created fresh, keep them concise and accurate to the current app; do not fabricate features. (These files are gitignored, so they will not be committed — create them on disk regardless, as the task requires.)
+      Files: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/submission/TRACKS.md`, `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter/submission/PROJECT.md`
+      Verify: both files exist and `grep -il "gemini" /home/sierra/.../submission/*.md` returns nothing; `grep -il "nova" /home/sierra/.../submission/*.md` lists both files.
 
-- Files: `<ROOT>/src/core/fhir.js`
+- [ ] 10. **Full green suite, clean build, final report, and local commit.**
+      Run the whole suite and build once more; scrub for any leftover Gemini/VITE_GEMINI across the whole worktree (excluding node_modules). Record the manual-live-run instructions (not executed in CI): `AWS_PROFILE=simi-ops AWS_REGION=us-east-1 npm run dev`, then POST a small PNG as base64 to `http://localhost:5173/api/identify`; expect a JSON `{taxonId,confidence,cues}` (~700ms). Then stage and commit the tracked changes (vite.config.js, src/core/ai-assist.js, src/core/ai-assist.test.js, src/ui/AssistPanel.jsx, package.json, package-lock.json, README.md) on branch `nova-adapter`.
+      Files: (verification + commit)
+      Verify: `cd /home/sierra/.../nova-adapter && npm test` → all green (report exact count, expect ≈132); `npm run build` → succeeds; `grep -rin "gemini\|VITE_GEMINI" /home/sierra/.../nova-adapter --exclude-dir=node_modules --exclude-dir=dist` returns nothing; `git -C /home/sierra/.../nova-adapter status --short` shows only intended files; create the commit; confirm `dist/` has no `@aws-sdk` footprint (re-assert item 7). Report built bundle sizes in the summary.
 
-### Step 3. Add a `Specimen` (SpecimenOah) for the macroinvertebrate sample.
-Insert BEFORE the biotic Observation so references resolve top-down (order does
-not affect validity, but keep it readable). Only emit when there is a biotic
-result (`biotic.score !== null`), since the specimen represents the sampled
-community:
+## Definition of done (plan must satisfy all)
 
-```js
-if (biotic.score !== null) {
-  entries.push(entry(specimenId, {
-    resourceType: 'Specimen',
-    meta: { profile: [PROFILE_SPECIMEN] },
-    status: 'available',
-    type: {
-      coding: [{ system: SYS, code: 'macroinvertebrate-kick-sample', display: 'Streambed macroinvertebrate kick-sample' }],
-      text: 'Streambed macroinvertebrate kick-sample',
-    },
-    subject: { reference: locId, display: stream?.name }, // collected from the Location (the stream)
-    collection: { collectedDateTime: when },
-  }));
-}
-```
-Rationale for `Specimen.subject = Location`: base R4 `Specimen.subject` allows
-`Reference(... | Location | ...)`; this ties the physical sample to the site.
-Confirmed 0 structural errors on HAPI.
-
-- Files: `<ROOT>/src/core/fhir.js`
-
-### Step 4. Rewrite the biotic `Observation` to conform to ObservationIndicatorsOah.
-Replace the current biotic Observation block (the one with
-`subject: {reference: groupId}` and `focus: [...]`). Drop `focus` and the Group
-reference. New shape:
-
-```js
-if (biotic.score !== null) {
-  entries.push(entry(bioticId, {
-    resourceType: 'Observation',
-    meta: { profile: [PROFILE_OBS_IND] },
-    status: 'final',                                   // profile fixes #final
-    category: [{
-      coding: [{ system: 'http://terminology.hl7.org/CodeSystem/observation-category', code: 'survey', display: 'Survey' }],
-    }],
-    code: {                                            // 1.. required
-      coding: [{ system: SYS, code: 'biotic-index', display: 'Stream macroinvertebrate biotic index' }],
-      text: 'Stream ecological health (biotic index)',
-    },
-    subject: { reference: locId, display: stream?.name },   // KEY: Location is the subject
-    effectiveDateTime: when,                                // effective[x] 1..
-    performer: [{ reference: performerId, display: 'Citizen observer (Bahari)' }], // 1.. required
-    specimen: { reference: specimenId },                    // link to SpecimenOah
-    valueQuantity: {                                        // value[x] = Quantity (allowed by profile)
-      value: biotic.score, unit: 'sensitivity (1-10)', system: SYS, code: 'biotic-score',
-    },
-    interpretation: [{
-      coding: [{ system: SYS, code: biotic.classKey, display: biotic.classInfo?.label }],
-      text: biotic.classInfo?.blurb,
-    }],
-    method: { text: 'Average pollution-sensitivity of indicator groups found (miniSASS/SASS/SIGNAL family)' },
-    // per-taxon counts as components; component.value[x] 1.. (Quantity allowed)
-    component: biotic.contributions.map((c) => ({
-      code: {
-        coding: [{ system: SYS, code: `taxon-${c.id}`, display: c.commonName }],
-        text: `${c.commonName} (${c.scientificGroup})`,
-      },
-      valueQuantity: { value: c.count, unit: 'individuals', system: SYS, code: 'count' },
-    })),
-  }));
-}
-```
-
-### Step 5. Add the required `performer` as a contained/entry Device.
-The IG requires `performer` 1.. . Model the citizen observer as a `Device` entry
-in the bundle (confirmed 0 errors on HAPI). Add a `performerId` to the id list and
-push a Device entry (emit it unconditionally so the reliability Observation can
-also reference it if desired; minimal shape):
-
-```js
-const performerId = `urn:uuid:${idGen()}`;
-// ...
-entries.push(entry(performerId, {
-  resourceType: 'Device',
-  deviceName: [{ name: 'Bahari citizen-observer app', type: 'user-friendly-name' }],
-  type: { text: 'Citizen-science stream assessment application' },
-}));
-```
-Place this Device entry early (before the biotic Observation) so it is readable.
-Document in a code comment WHY a Device represents the citizen observer (keeps
-HAPI structurally valid; no Patient/Practitioner PII for an anonymous citizen).
-
-### Step 6. Update the reliability Observation and the RiskAssessment subjects.
-- Reliability `Observation`: change `subject: { reference: groupId, ... }` to
-  `subject: { reference: locId, display: stream?.name }`. Keep `derivedFrom` →
-  `bioticId`. Keep its own `code`/category. (May optionally add
-  `meta.profile:[PROFILE_OBS_IND]` and a `performer:[{reference: performerId}]`;
-  simpler to leave it as a plain Observation to avoid the profile's `specimen`
-  expectations — plain is fine, 0 structural errors. Leave reliability as a plain
-  Observation, only switch its `subject` to `locId`.)
-- `RiskAssessment`: change `subject: { reference: groupId, ... }` to
-  `subject: { reference: locId, display: stream?.name }`. Keep `basis` →
-  `bioticId`, keep `prediction[]` with `qualitativeRisk` only, keep the honesty
-  `note`. Replace its `code.coding[].system` (currently `SYS`) — keep `SYS` (now
-  the non-placeholder URL) as-is; no Group remains.
-- Update the `entries` id declarations: final set is `locId`, `performerId`,
-  `specimenId` (conditional), `bioticId` (conditional), `reliabilityId`,
-  `riskId`. Remove `groupId`.
-
-### Step 7. Update `validateBundle()` structural checks in `fhir.js`.
-- Remove the `Group` branch (`Group.type`/`Group.actual` checks).
-- Add/adjust checks:
-  - `Location`: require `status`, `name`, `mode`, and `position` present (per
-    LocationOah key constraints), plus at least one `identifier`.
-  - `Observation`: already checks `status`, `code`, `subject`; additionally, for
-    the biotic Observation (detect via `code.coding` containing `biotic-index`)
-    require `effectiveDateTime` and non-empty `performer`.
-  - `Specimen`: require `status` and `type`.
-- Keep the reference-resolution walk (`collectReferences`) unchanged — it already
-  catches dangling `urn:uuid:` refs, which now must all resolve (Location,
-  Device, Specimen, biotic, reliability, risk).
-- Files: `<ROOT>/src/core/fhir.js`
-- Verify: `npx vitest run src/core/fhir.test.js` — after Step 9 rewrite, green.
-
-### Step 8. Rewrite `scripts/validate-fhir.mjs` to separate profile-fetch errors.
-The sample bundle now carries `meta.profile` with unresolvable IG canonicals, so
-HAPI will report profile-fetch errors. Change the script so it:
-- Classifies each `error`/`fatal` issue: if its `diagnostics`/`details.text`
-  matches `/Invalid profile|Profile reference .* has not been checked|could not
-  (be )?found|failed to retrieve profile/i`, count it as a **profileFetch** issue;
-  otherwise count it as a **structural** error.
-- Prints both tallies per resource and a final line:
-  `Result: PASS — 0 structural errors (N profile-fetch notices, expected: public
-  HAPI cannot load the draft OAH IG)`.
-- `process.exit(structuralErrors === 0 ? 0 : 1)` — profile-fetch notices do NOT
-  fail the script.
-- Also add an OFFLINE guard: wrap the whole run so that if every `fetch` throws
-  (network unreachable), the script still (a) builds the bundle, (b) runs the
-  local `validateBundle()` on it, (c) prints the bundle's structural validity from
-  the local checker, (d) prints a clear "HAPI unreachable — re-run when online"
-  line, and (e) exits 0 (do not fail CI/offline). Import `validateBundle`
-  alongside `buildBundle`.
-- Update the sample `stream` object so it includes an `id` (the LocationOah
-  identifier needs `stream.id`); the current sample already sets `id: 'seed-1'`.
-- Files: `<ROOT>/scripts/validate-fhir.mjs`
-- Verify: `npm run validate:fhir` — exits 0; prints `0 structural errors` (online)
-  or the offline fallback with local structural validity true. If online, confirm
-  no structural (non-profile) errors on any resource.
-
-### Step 9. Rewrite `src/core/fhir.test.js` for the new structure.
-Replace the Group-centric assertions. Keep deterministic `seqIdGen`. New/changed
-assertions (keep every unrelated test that still holds):
-- Bundle is `collection`, `entry.length >= 4`.
-- `types` CONTAINS `Location`, `Observation`, `Specimen`, `Device`,
-  `RiskAssessment`; types do NOT contain `Group` and do NOT contain `Patient`.
-- No `meta.profile` anywhere references `bahari.example`; the placeholder
-  canonical `https://bahari.example/...` appears NOWHERE in the serialized bundle
-  (`JSON.stringify(b)` does not match `/bahari\.example/`).
-- Location: `meta.profile` includes `http://hl7.eu/fhir/ig/oah/StructureDefinition/location-oah`;
-  has non-empty `identifier`, `name`, `mode === 'instance'`, and
-  `position.latitude`/`position.longitude` numbers equal to the stream coords.
-- Biotic Observation: `meta.profile` includes `.../observation-indicators-oah`;
-  `status === 'final'`; `subject.reference === <Location fullUrl>` (KEY — Location
-  is the subject, replacing the old Group+focus assertions); `effectiveDateTime`
-  present; `performer[0].reference` resolves to the Device entry;
-  `specimen.reference` resolves to the Specimen entry; has NO `focus`.
-- Specimen: `meta.profile` includes `.../specimen-oah`; `subject.reference ===
-  <Location fullUrl>`; `status` and `type` present.
-- Components still number 3 for `{stonefly, mayfly, snail}` with counts
-  `[1,2,3]` (unchanged logic).
-- Reliability Observation: `subject.reference === <Location fullUrl>`;
-  `derivedFrom[0].reference === <biotic fullUrl>`.
-- RiskAssessment: `subject.reference === <Location fullUrl>`; `basis[0].reference
-  === <biotic fullUrl>`; every prediction has `qualitativeRisk` and NOT
-  `probabilityDecimal`/`probabilityRange`; honesty note matches
-  `/not a water-quality test|not a .*diagnosis/i`.
-- `validateBundle(b).valid === true`, `errors` empty; `resourceCounts.Location ===
-  1`, `resourceCounts.Observation >= 2`, `resourceCounts.Specimen === 1`,
-  `resourceCounts.Device === 1`, `resourceCounts.RiskAssessment === 1`.
-- "omits biotic when nothing found" case: with empty counts, there is NO biotic
-  Observation AND NO Specimen (specimen is conditional on biotic), and
-  `validateBundle` stays valid with no dangling refs. Adjust the existing
-  "omits ..." test accordingly.
-- Keep the `validateBundle` negative tests (unresolved reference, non-bundle,
-  missing required field) — update the "missing required field" test to delete
-  `status` from the biotic Observation (still triggers an error).
-- Files: `<ROOT>/src/core/fhir.test.js`
-- Verify: `npx vitest run src/core/fhir.test.js` — all green.
-
-### Step 10. Light accuracy check of `StepFhir.jsx` copy (no restyle).
-Confirm the resource list still matches: Location (now truly the subject),
-Observation ×N, RiskAssessment. There is no Group line to remove. Do NOT change
-layout/classes. If any copy says "Group", fix wording only (none found during
-planning).
-- Files: `<ROOT>/src/steps/StepFhir.jsx` (likely no change)
-- Verify: `npx vitest run src/App.smoke.test.jsx` — green.
-
----
-
-## TASK 2 — Positioning docs (vs miniSASS + IG alignment)
-
-NOTE: `submission/` is gitignored and absent from this worktree. For each
-`submission/*` file below, CREATE it in this worktree at the given path, seeding
-it with the content currently in the main copy (reproduced inline where needed),
-then apply the edits. Record in findings that these are gitignored.
-
-### Step 11a. `submission/PROJECT.md` + `submission/TRACKS.md` — add miniSASS differentiation.
-Seed both files from main's current versions (structure summarized in findings).
-Then:
-- In `submission/PROJECT.md`, add a short subsection titled
-  **"How Bahari differs from miniSASS"** (place it after "The solution" or inside
-  "What makes it complete"). Content: acknowledge miniSASS is a real, funded
-  citizen-science app that already does smartphone-photo AI macroinvertebrate ID +
-  the same biotic-scoring family and does it well; state Bahari does NOT try to
-  out-ML miniSASS on identification; Bahari's unique seam is carrying the citizen
-  reading DOWNSTREAM into (a) a transparent, separable data-reliability score
-  researchers can filter on, (b) qualitative, caveated One Health human/animal
-  considerations, (c) an IG-aligned FHIR R4 record (Location-subject, per the
-  official OneAquaHealth HL7 IG) that real health/research systems can ingest.
-  One line: "miniSASS stops at a score; Bahari turns a score into an
-  interoperable, health-connected record." Honest tone; no disparagement.
-- In `submission/TRACKS.md`, add the same differentiation compactly (2–4 lines),
-  logically under Track 2 (data-to-insight) or Track 7 (standards).
-- Files: `<ROOT>/submission/PROJECT.md`, `<ROOT>/submission/TRACKS.md`
-
-### Step 11b. IG-alignment claims across docs.
-Update these files to state the FHIR export now ALIGNS WITH the official
-OneAquaHealth HL7 FHIR IG (github.com/hl7-eu/oah; canonical
-`http://hl7.eu/fhir/ig/oah`), naming the specific profiles conformed to —
-**LocationOah**, **ObservationIndicatorsOah**, **SpecimenOah** — and honestly
-noting where Bahari extends/approximates the draft IG (One Health RiskAssessment
-is Bahari's own layer; custom codes under
-`https://lewisawe.github.io/bahari/fhir/CodeSystem/stream-health` where no
-standard code exists). Use the precise honesty phrasing: "aligned with /
-conformant to the referenced profiles' key constraints, validated structurally on
-HAPI R4" — do NOT claim full profile conformance. Explain Location-as-subject as
-the IG-correct way to make the ecosystem the subject, and note the `Group` was
-REMOVED because `GroupOah` models person cohorts (type #person, actual false),
-not ecosystems.
-
-Apply to:
-- `<ROOT>/submission/FHIR_VALIDATION.md` — rewrite the modeling summary and the
-  "what external validation caught" section to the NEW model (Location subject,
-  Specimen added, Device performer, Group removed). Replace the placeholder
-  CodeSystem URL with the new one. Replace the stale "Observation.subject cannot
-  be Location" claim with the correct explanation (base R4 permits it; the IG
-  constrains it to `Reference(LocationOah)`). Update the pasted validator result
-  block to reflect the new resource set (Location, Device, Specimen,
-  Observation ×2, RiskAssessment) and state that remaining notices are (i)
-  terminology warnings for custom codes and (ii) IG-profile-not-fetchable notices
-  on the public server, neither of which is a structural error. If `npm run
-  validate:fhir` was runnable, paste the real new tallies; otherwise mark the
-  block "to be re-run — see note" and keep the structural-0 claim backed by the
-  local checker.
-- `<ROOT>/README.md` — update the **"FHIR"** section: Location is the subject
-  (LocationOah), the ecological reading is an ObservationIndicatorsOah with the
-  Location as subject, the sample is a SpecimenOah, the citizen observer is a
-  Device performer, reliability is a second Observation, One Health is a
-  RiskAssessment (qualitative). Name the IG and canonical. Keep the
-  `npm run validate:fhir` line. Also update **"Responsible AI"** per Task 3 Step
-  15 and **"How the science works"** per Task 4 Step 14.
-- `<ROOT>/submission/TRACKS.md` Track 7 — currently says "using a `Location`"
-  but the committed code used Group; make Track 7 consistent with the NEW code:
-  Location is the subject per LocationOah, name the three profiles, note Group
-  removal and why, keep the HAPI structural-validation claim honest.
-- Files: `<ROOT>/submission/FHIR_VALIDATION.md`, `<ROOT>/README.md`,
-  `<ROOT>/submission/TRACKS.md`
-- Verify: `grep -rn "bahari.example" <ROOT>/README.md <ROOT>/submission` returns
-  nothing; `grep -rn "hl7.eu/fhir/ig/oah" <ROOT>/README.md <ROOT>/submission`
-  finds the canonical in README, FHIR_VALIDATION.md, TRACKS.md. Claims match
-  what `fhir.js` now emits.
-
----
-
-## TASK 3 — Real vision-provider adapter behind `setAssistProvider`
-
-### Step 13a. Add `geminiProvider` factory to `src/core/ai-assist.js`.
-Add an exported factory that returns a provider function matching the existing
-provider contract (`async (input) => { taxonId, confidence, reasoning:string[],
-alternatives?:[{taxonId,confidence}] }`), consumed by `applyConfidencePolicy`.
-Requirements:
-- Reads the API key from `import.meta.env.VITE_GEMINI_API_KEY`. NEVER hardcode or
-  commit a key.
-- Accepts options for injectability/testing: `geminiProvider({ apiKey, fetchImpl,
-  endpoint } = {})` where `apiKey` defaults to
-  `import.meta.env?.VITE_GEMINI_API_KEY`, `fetchImpl` defaults to global `fetch`,
-  `endpoint` has a sensible default. (Injectable `fetchImpl` lets the unit test
-  mock the network with no real calls.)
-- The returned function sends the image (`input.photoDataUrl` or `input.photoName`
-  payload — accept a base64/dataURL field; document the expected input field) to
-  the vision model and MAPS the model response into
-  `{ taxonId, confidence, cues[] -> reasoning[] }` using the existing `TAXA` ids
-  (map model label → nearest `taxonId`; unknown label → `taxonId: null`). Preserve
-  the `{ taxonId, confidence, cues }` shape the task names by setting
-  `reasoning = cues`.
-- Set `providerName = 'gemini-vision'` on the returned function.
-- Add `createAssistProvider()` (or extend behavior) so that if no key is present
-  OR the mapped call throws/rejects, it AUTOMATICALLY FALLS BACK to the built-in
-  `stubProvider` for that call, so the app runs offline/keyless. Implement the
-  fallback INSIDE the gemini provider function: try the real call; on missing key
-  or any error, `return stubProvider(input)`. Keep `getProviderName()` meaningful
-  (it may still report 'gemini-vision'; the per-call fallback is internal).
-- Do NOT change `applyConfidencePolicy`, the thresholds, or the human-in-the-loop
-  policy — that differentiator stays exactly as-is.
-- Files: `<ROOT>/src/core/ai-assist.js`
-
-### Step 13b. Add focused unit tests (mock fetch; no real network).
-Add to `<ROOT>/src/core/ai-assist.test.js` a new describe block
-`'real vision provider (gemini adapter)'`:
-- **response-mapping:** build `geminiProvider({ apiKey: 'test', fetchImpl: mock })`
-  where `mock` resolves a fake model JSON; assert the mapped result has a valid
-  `taxonId` in `TAXON_IDS` (or null), a numeric `confidence` in [0,1], and
-  `reasoning` as a string array; then push it through `applyConfidencePolicy` and
-  assert the status gating still works.
-- **keyless fallback:** `geminiProvider({ apiKey: undefined })` (no key) →
-  calling it returns a stub-shaped result (deterministic for a given
-  `photoName`/`seed`) WITHOUT invoking `fetchImpl` (assert the mock fetch was not
-  called).
-- **error fallback:** `geminiProvider({ apiKey: 'x', fetchImpl: () =>
-  Promise.reject(new Error('network')) })` → falls back to stub shape, no throw.
-- Keep all existing ai-assist tests passing (do not alter the stub).
-- Files: `<ROOT>/src/core/ai-assist.test.js`
-- Verify: `npx vitest run src/core/ai-assist.test.js` — all green, no real network.
-
-### Step 15. README "Responsible AI" update.
-In `<ROOT>/README.md` "Responsible AI", describe the real adapter + automatic
-keyless/error fallback and how to supply a key (`VITE_GEMINI_API_KEY` env var),
-making clear the architecture supports a production vision model with NO UI
-change and the confidence-gating policy is unchanged. (Combine with Step 11b
-README edits in one pass.)
-- Files: `<ROOT>/README.md`
-
----
-
-## TASK 4 — Reconcile biotic sensitivity weights (PATH A: cite source)
-
-### Step 14. Annotate `taxa.js` weights with the miniSASS citation (Path A + tie note).
-In `<ROOT>/src/core/taxa.js`:
-- Update the header comment: state the per-group sensitivity values follow the
-  published **miniSASS** citizen-science group-sensitivity scale (1–10 ordering of
-  these macroinvertebrate groups), already linked in the existing Sources block;
-  keep the existing miniSASS/SASS5/SIGNAL links.
-- Add a concise inline comment per taxon (or per tier) tying its integer to the
-  published sensitivity ORDER, e.g. `sensitivity: 10, // Plecoptera — most
-  pollution-sensitive group in the miniSASS scale`. For the groups whose exact
-  integer is a positioning choice within the ordering (the two `4` ties
-  snail/true_fly_larva, and the mid `5`/`6`), add a short note that the value is a
-  documented surrogate positioned by the published sensitivity ordering — NOT a
-  fabricated exact source. This is Path A with an honest Path-B micro-fallback for
-  ties.
-- Do NOT change any numeric weight (preserves `biotic-index.test.js` expected
-  values exactly).
-- Also add one sentence to `<ROOT>/README.md` "How the science works": the
-  weights follow the published miniSASS sensitivity ordering (cited in
-  `taxa.js`), with tie positions documented as a transparent surrogate.
-- Files: `<ROOT>/src/core/taxa.js`, `<ROOT>/README.md`
-- Verify: `npx vitest run src/core/biotic-index.test.js` — green with NO
-  expected-value edits (weights unchanged).
-
----
-
-## FINAL VERIFICATION (run after all steps)
-
-1. `cd <ROOT> && npm test` — expect **>= 122 passing**, 0 failing. (fhir.test.js
-   and ai-assist.test.js gain tests; counts rise.)
-2. `cd <ROOT> && npm run build` — succeeds.
-3. `cd <ROOT> && npm run validate:fhir` — exits 0; prints `0 structural errors`
-   (online) or offline fallback with local structural validity `true`. No
-   non-profile structural errors.
-4. `grep -rn "bahari.example" <ROOT>/src <ROOT>/scripts <ROOT>/README.md <ROOT>/submission`
-   — returns nothing (placeholder fully removed).
-5. `grep -rn "resourceType: 'Group'\|'Group'" <ROOT>/src/core/fhir.js` — returns
-   nothing (Group removed).
-6. Confirm `fhir.js` emits `meta.profile` canonicals on Location, biotic
-   Observation, and Specimen (grep for `hl7.eu/fhir/ig/oah` in `src/core/fhir.js`).
-
-## Scope guardrails
-- Surgical diffs only; do not restyle UI or touch unrelated modules
-  (`aggregate`, `history`, `map-utils`, `contrast`, `one-health` logic — only its
-  references via fhir.js subject change, which is handled in fhir.js not
-  one-health.js).
-- No API keys committed. No network calls in tests.
-- Keep the human-in-the-loop AI policy and the qualitative-only RiskAssessment
-  exactly as they are.
+- Worktree only; branch `nova-adapter`; committed locally, not pushed.
+- `npm test` green, ~132 tests, no real-network/real-AWS in any test.
+- `npm run build` succeeds; production CLIENT bundle (`dist/`) contains NO `@aws-sdk/*` (proxy is dev-server-only via `configureServer` + dynamic import). Bundle sizes reported.
+- Browser adapter never imports `@aws-sdk/*`; it only `fetch`es `/api/identify`.
+- No secrets committed; no `VITE_` AWS vars; AWS creds come from `AWS_PROFILE` server-side only.
+- `stubProvider`, `setAssistProvider`, `resetAssistProvider`, `getProviderName`, `applyConfidencePolicy`, `identifyTaxon`, `CONFIDENT_THRESHOLD`, `REVIEW_THRESHOLD` unchanged — human-in-the-loop policy preserved.
+- All Gemini references replaced by Amazon Nova Pro / Amazon Bedrock in code, tests, README, and submission docs.

@@ -67,20 +67,32 @@ the human (defer < 0.5, review < 0.75, suggested above — the AI never records)
 The engine is swappable (`setAssistProvider`): the app ships with a
 zero-dependency stub so the demo never depends on a live model.
 
-A real **Gemini vision adapter** (`geminiProvider` in `src/core/ai-assist.js`)
-is included behind that same interface. It reads its key from the
-`VITE_GEMINI_API_KEY` environment variable (never hardcoded or committed), sends
-the actual photo to the vision model, and maps the response into our
-`{ taxonId, confidence, cues }` shape — which then flows through the **unchanged**
-confidence-gating policy. If no key is present, or the call fails for any reason,
-the adapter **automatically falls back to the stub** for that call, so the app
-always runs offline/keyless. To supply a key, add it to a local `.env` (which is
-gitignored):
+A real **Amazon Nova Pro vision adapter** (`novaProvider` in
+`src/core/ai-assist.js`) is included behind that same interface. It uses the
+**Amazon Bedrock Converse API** with model id `us.amazon.nova-pro-v1:0`. The
+browser never talks to AWS directly and never bundles the AWS SDK: the adapter
+POSTs the photo (base64 + format + optional hint) to a **local Vite dev proxy**
+at `/api/identify`, which runs server-side under `npm run dev` and calls Bedrock
+using your **local AWS profile** (no keys in the browser, no `VITE_` AWS
+variables). The proxy maps Nova Pro's answer into our
+`{ taxonId, confidence, cues }` shape — which then flows through the
+**unchanged** confidence-gating policy.
 
-```bash
-# .env  (never commit this)
-VITE_GEMINI_API_KEY=your-key-here
-```
+Two framings, both honest:
+
+- **Local dev (live):** run with your AWS profile to get real Nova Pro answers:
+
+  ```bash
+  AWS_PROFILE=simi-ops AWS_REGION=us-east-1 npm run dev
+  ```
+
+  (`AWS_REGION` defaults to `us-east-1` if unset.) The dev proxy exists ONLY on
+  the dev server, so the AWS SDK never enters the production client bundle.
+
+- **Static deploy (fallback):** the deployed static site has no proxy, so the
+  POST to `/api/identify` fails and the adapter **automatically falls back to the
+  stub** for that call. The public demo therefore needs **no backend and no
+  keys** — the "no backend required" claim stays true for the deployed site.
 
 Swapping to the real model needs **no UI change** and does not alter the
 human-in-the-loop safeguards.

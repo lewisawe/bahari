@@ -13,12 +13,28 @@ export default function AssistPanel({ onConfirm, onClose, presetHint }) {
   const [phase, setPhase] = useState('idle'); // idle | thinking | done
   const [result, setResult] = useState(null);
   const [photoName, setPhotoName] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
 
   async function runAssist(hintTaxonId) {
     const name = photoName || `photo-${Date.now()}.jpg`;
     setPhotoName(name);
     setPhase('thinking');
-    const r = await identifyTaxon({ photoName: name, hintTaxonId, seed: name.length });
+    // Base payload: filename-only path (keeps the shipped stub deterministic).
+    const payload = { photoName: name, hintTaxonId, seed: name.length };
+    // In the browser, if a real file was picked, also read its bytes so a Nova
+    // provider (installed via setAssistProvider) can see the actual image. The
+    // extra fields are inert when the default stub is active. Guarded so Node
+    // tests (no FileReader / no attached File) keep the exact current behavior.
+    if (photoFile && typeof FileReader !== 'undefined') {
+      try {
+        const { imageBase64, imageFormat } = await readFileAsBase64(photoFile);
+        payload.imageBase64 = imageBase64;
+        payload.imageFormat = imageFormat;
+      } catch {
+        // ignore — fall through with the filename-only payload
+      }
+    }
+    const r = await identifyTaxon(payload);
     setResult(r);
     setPhase('done');
   }
@@ -26,6 +42,7 @@ export default function AssistPanel({ onConfirm, onClose, presetHint }) {
   function onPickPhoto(e) {
     const f = e.target.files?.[0];
     setPhotoName(f ? f.name : `sample-${Date.now()}.jpg`);
+    setPhotoFile(f || null);
   }
 
   return (
@@ -185,4 +202,24 @@ function AssistResult({ result, onConfirm, onRetry }) {
       </div>
     </div>
   );
+}
+
+/**
+ * Read a File/Blob into { imageBase64 (raw base64, no data: prefix),
+ * imageFormat ('png'|'jpeg') }. Browser-only (uses FileReader).
+ */
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('read failed'));
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      const comma = dataUrl.indexOf(',');
+      const imageBase64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+      const type = (file.type || '').toLowerCase();
+      const imageFormat = type.includes('png') ? 'png' : 'jpeg';
+      resolve({ imageBase64, imageFormat });
+    };
+    reader.readAsDataURL(file);
+  });
 }

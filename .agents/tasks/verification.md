@@ -1,76 +1,111 @@
-# Verification — FHIR IG Alignment & Submission Hardening (Bahari)
+# Verification — Amazon Nova Pro (Bedrock) vision adapter
 
-## Iteration 1 (first implementation)
+Worktree: `/home/sierra/Desktop/projects/hackathons/oneaquahealth/.worktrees/nova-adapter`
+Branch: `nova-adapter`
+Date: 2026 (first iteration — no `review.json` present)
 
-Date: run on worktree `fhir-ig-align`.
+## Commands run (cwd = worktree)
 
-### Decision recorded (Task 1, One Health modeling)
-A design conflict was raised via send_message (warning) and the parent chose
-**Option 1**: model the One Health layer as a **Location-subject Observation**
-(ObservationIndicatorsOah), NOT a RiskAssessment. Reason: the official IG is
-Observation-centric with no RiskAssessment profile, and base-R4
-`RiskAssessment.subject` is 1..1 `Reference(Patient|Group)` only (cannot carry a
-Location without forcing a semantically-wrong Group back in). The One Health
-Observation is strictly qualitative (CodeableConcept values + reason/basis/limits
-text + caveat note; no numeric risk, no diagnosis).
+### 1. Install AWS SDK dev dependencies
+```
+npm install @aws-sdk/client-bedrock-runtime @aws-sdk/credential-providers --save-dev
+```
+Result: added 30 packages. Both appear under `devDependencies` (NOT
+`dependencies`): `@aws-sdk/client-bedrock-runtime ^3.1146.0`,
+`@aws-sdk/credential-providers ^3.1146.0`. `node_modules/@aws-sdk/*` present.
 
-### Commands run
-- `npm test` (cwd worktree root) → **132 passed** (13 files, 0 failing).
-  Baseline was 122; +10 net new tests (fhir.test.js and ai-assist.test.js).
-- `npm run build` → **success** (`vite build`, 59 modules, built in ~5s).
-- `npm run validate:fhir` → **exit 0**. HAPI R4 was **reachable**. Result:
-  `PASS — 0 structural errors (12 profile-fetch notices, expected: public HAPI
-  cannot load the draft OneAquaHealth IG)`. Per-resource structural-errors all 0:
-  Bundle 0, Location 0, Specimen 0, Observation(biotic) 0, Observation(reliability)
-  0, Observation(One Health) 0. The only non-structural notices are (a) IG
-  profile-fetch notices for the unresolvable `http://hl7.eu/fhir/ig/oah/...`
-  canonicals and (b) terminology warnings for the project custom CodeSystem.
-- `npx vitest run src/core/fhir.test.js` → 16 passed.
-- `npx vitest run src/core/ai-assist.test.js` → 17 passed.
-- `npx vitest run src/core/biotic-index.test.js` → 14 passed (weights unchanged).
-- `npx vitest run src/App.smoke.test.jsx` → 7 passed (StepFhir copy updated).
+### 2. Module export sanity
+```
+node -e "import('./src/core/ai-assist.js').then(m=>{...})"
+```
+Result: `ok: novaProvider present, gemini gone`. `geminiProvider` /
+`mapGeminiResponse` no longer exported. No `gemini|VITE_GEMINI|generativelanguage`
+in `src/core/ai-assist.js`.
 
-### Structural / IG checks (plan's final grep sweep)
-- `grep -rn "bahari.example" src scripts README.md submission` → only a test NAME
-  asserting its absence and a doc line stating it was removed; **no placeholder
-  URL in emitted data**. The emitted CodeSystem is
-  `https://lewisawe.github.io/bahari/fhir/CodeSystem/stream-health`.
-- `grep "resourceType: 'Group'|'Group'" src/core/fhir.js` → **no match**
-  (Group resource fully removed).
-- `grep RiskAssessment src/core/fhir.js` → only explanatory comments; **no
-  RiskAssessment resource emitted**.
-- `meta.profile` canonicals emitted on **Location** (location-oah), **Specimen**
-  (specimen-oah), **biotic Observation** (observation-indicators-oah), and
-  **One Health Observation** (observation-indicators-oah).
-- `hl7.eu/fhir/ig/oah` present in `src/core/fhir.js` (profile constants).
+### 3. `npm test` (full vitest suite)
+```
+npm test
+```
+Result: **PASS — 132 tests passed across 13 test files** (0 failures).
+`src/core/ai-assist.test.js` = 17 tests (11 kept + 6 new Nova adapter tests;
+the 6 old Gemini tests were replaced). No real network / no real AWS: the Nova
+tests all MOCK `fetch` via `fetchImpl`.
 
-### Confirmations
-- No `Group` resource remains anywhere in the generated bundle. ✓
-- `meta.profile` IG canonicals present on Location/Specimen/Observation(s). ✓
-- All internal `urn:uuid:` references resolve (validateBundle green; HAPI 0
-  structural errors). ✓
-- Fresh bundle has **0 structural errors** on HAPI R4. ✓
+Nova adapter tests cover:
+- (a) well-formed proxy response maps to `{taxonId,confidence,reasoning=cues}`,
+  flows through unchanged policy → `suggested`.
+- (b) unknown label → `taxonId: null` → policy `defer`.
+- (c) fetch rejects (offline/error) → stub fallback, no throw, deterministic.
+- (d) non-OK HTTP (500 / 404 proxy-absent) → stub fallback.
+- (e) no `imageBase64` → stub WITHOUT any network call, deterministic.
+- (f) `providerName === 'nova-vision'`.
 
-### Notes on IG facts (verified against github.com/hl7-eu/oah source)
-- `ObservationIndicatorsOah`: `subject only Reference(LocationOah)`,
-  `performer 1..` (no type constraint; IG examples use `performer.display`),
-  `specimen only Reference(SpecimenOah)`, value CodeableConcept|Quantity,
-  component value 1.. .
-- `LocationOah`: identifier 1.., name 1.., mode 1..1 = #instance,
-  position.longitude/latitude 1..1.
-- `SpecimenOah`: subject 1.. only Reference(LocationOah); type (extensible);
-  collection.collector 1..1 (IG wants PractitionerRole — we use a display-only
-  collector for an anonymous citizen, which is base-R4 valid), collected[x]
-  dateTime 1..1.
-- `GroupOah` = person cohort (type #person) — confirms Group is wrong for an
-  ecosystem; removed.
-- Performer modeled display-only (no Device reference) because base-R4
-  `Observation.performer` excludes Device; this matches the IG's own examples and
-  yields 0 structural errors.
+### 4. `npm run build` (production client build)
+```
+npm run build
+```
+Result: **PASS** — `vite v6.4.3 building for production`, 59 modules transformed,
+built in ~4.5s.
 
-### Submission docs note
-`submission/` is **gitignored** (see `.gitignore`), so the files created in this
-worktree (`submission/PROJECT.md`, `TRACKS.md`, `FHIR_VALIDATION.md`,
-`DEMO_SCRIPT.md`, `README.md`) will NOT appear in `git diff`/the commit. They are
-written to disk as required by Task 2. The tracked `README.md` edits DO appear in
-the commit.
+Built client bundle sizes (`dist/`):
+| File | Bytes | gzip |
+|------|-------|------|
+| dist/index.html | 902 | 0.47 kB |
+| dist/assets/index-0F54-1_l.css | 18099 | 4.34 kB |
+| dist/assets/leaflet-Dgihpmma.css | 15037 | 6.38 kB |
+| dist/assets/StreamMap-ra6wnmP0.js | 2063 | 1.16 kB |
+| dist/assets/leaflet-src-Cf1xDDdj.js | 150053 | 43.58 kB |
+| dist/assets/index-ClP97-YU.js | 236234 | 72.02 kB |
+
+### 5. CRITICAL — AWS SDK absent from client bundle
+```
+grep -rl "bedrock-runtime|@aws-sdk|BedrockRuntimeClient|ConverseCommand|fromNodeProviderChain" dist/
+```
+Result: **CLEAN — no match in `dist/`** (grep exited non-zero → nothing found).
+The dev proxy lives only in `vite.config.js`'s `configureServer` hook (dev-server
+only) and imports the SDK dynamically inside the request handler, so no AWS SDK
+code can enter the production client bundle. The browser adapter (`novaProvider`)
+only `fetch`es `/api/identify`; it never imports `@aws-sdk/*`. Confirmed
+`novaProvider` body IS present in the bundle (`nova-vision`, `imageBase64`, POST
+logic) — it is shipped, just never imports the SDK.
+
+### 6. Full-worktree Gemini scrub (excl node_modules, dist, .git)
+```
+grep -rin "gemini|VITE_GEMINI|generativelanguage" . --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git
+```
+Result: the ONLY remaining matches are inside `.agents/tasks/plan.md` (the
+planning document that describes the removal work itself). No Gemini references
+remain in code, tests, `README.md`, or `submission/*.md`.
+
+### 7. Submission + README framing
+- `README.md`: no `gemini`/`VITE_GEMINI`; contains Amazon Nova Pro / Amazon
+  Bedrock, `us.amazon.nova-pro-v1:0`, `AWS_PROFILE=simi-ops`, local-dev-live /
+  static-fallback framing.
+- `submission/PROJECT.md` + `submission/TRACKS.md`: created on disk (dir is
+  gitignored, so they are NOT committed). Both mention Nova; neither mentions
+  Gemini. PROJECT.md names it the "Amazon Nova Pro (Amazon Bedrock) vision
+  adapter"; TRACKS.md Track 3 carries the explainable-gate + stable-seam +
+  fallback story.
+
+## Preserved exactly (NOT changed)
+`stubProvider`, `setAssistProvider`, `resetAssistProvider`, `getProviderName`,
+`applyConfidencePolicy`, `identifyTaxon`, `CONFIDENT_THRESHOLD = 0.75`,
+`REVIEW_THRESHOLD = 0.5`, the CUES/LOOKALIKES tables, and the RNG helpers.
+Provider contract unchanged: `async (input) => { taxonId, confidence,
+reasoning:string[], cues, alternatives }` with `.providerName`.
+
+## Manual live-run (NOT executed in CI — no network/AWS in tests)
+```
+AWS_PROFILE=simi-ops AWS_REGION=us-east-1 npm run dev
+# then POST a small PNG (base64) to http://localhost:5173/api/identify
+# -> expect JSON { taxonId, confidence, cues } (~700ms)
+```
+The dev proxy decodes base64 → bytes and calls Bedrock Converse with
+`modelId: 'us.amazon.nova-pro-v1:0'`, `inferenceConfig.maxTokens = 300`
+(always set), credentials from the local AWS profile via `fromNodeProviderChain`.
+
+## Summary
+- `npm test`: 132 passed / 13 files / 0 failed.
+- `npm run build`: success; client bundle has NO `@aws-sdk/*` (verified).
+- Secrets: none committed; no `VITE_` AWS vars; creds only via local AWS profile
+  server-side at dev time.
